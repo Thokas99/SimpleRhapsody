@@ -1925,7 +1925,12 @@ if _has_sbg:
                 config['working_dir'], 'sbg', wildcards.sample,
                 _sbg_mex_subdir, 'matrix.mtx.gz'),
             script = op.join(workflow.basedir, 'src', 'generate_sce_sbg.R'),
-            index2barcode = op.join(workflow.basedir, 'src', 'index2barcode.R')
+            index2barcode = op.join(workflow.basedir, 'src', 'index2barcode.R'),
+            ## written next to features_map, which gives the gene ids
+            starsolo_counts = lambda wildcards: (
+                [op.join(config['working_dir'], 'starsolo', wildcards.sample,
+                         'Solo.out', 'Gene', 'filtered', 'matrix.mtx')]
+                if 'starsolo' in get_aligners() else [])
         output:
             sce = op.join(config['working_dir'], 'sbg', '{sample}', '{sample}_sbg_sce.rds')
         params:

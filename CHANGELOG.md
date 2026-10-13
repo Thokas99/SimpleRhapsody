@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `generate_sce_sbg` waits for STARsolo, so the `sbg` object gets gene ids.
 - The UniverSC sandbox gets scipy 1.2.3; Cell Ranger failed with 0.18.1.
 - The paper rules read the `aligner` config key.
 - The benchmarks report waits for the tag splits and the simulation validation.
