@@ -4,7 +4,7 @@
 #SBATCH --job-name=rhapsodist-figures
 #SBATCH --time=04:00:00
 #SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=8000
+#SBATCH --mem-per-cpu=12000
 #SBATCH --output=slurm/logs/%x-%j.out
 #SBATCH --signal=B:TERM@300
 
