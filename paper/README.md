@@ -108,7 +108,11 @@ apptainer exec --writable universc_sandbox python2.7 -m pip install scipy==1.2.3
 - scipy: the image has 0.18.1, and the `FILTER_BARCODES` stage of Cell Ranger fails with it on the epidermis sample. The sandbox gets 1.2.3, the last release for Python 2.7.
 - Config: `universc_sandbox` and `universc_technology` (`bd-rhapsody` or `bd-rhapsody-v2`).
 - Target: `<working_dir>/universc/<sample>/<sample>_universc_sce.rds`, from the downsampled reads.
-- Enhanced V2 beads: UniverSC 1.2.7 has no whitelist for the 384-sequence panel.
+- Enhanced beads: UniverSC 1.2.7 cannot run them.
+  - `launch_universc.sh` line 3175 tests for `bd-rhapsody`, so `-t bd-rhapsody-v2` removes no linker.
+  - Its pattern needs two bases before the first cell label section: 22% of HeLa read 1 records match, those with the `GT` inset.
+  - `whitelists/bd_rhapsody_cell_label_section*.txt` hold 96 sequences per section, not 384.
+  - With line 3175 corrected and the 384 lists, Cell Ranger finds 0.00% valid barcodes on 2 M HeLa read pairs.
 - v1 beads: the conversion writes some read 1 records with sequence and quality of unequal length, and Cell Ranger fails. The script drops those pairs, counts them in `<sample>_dropped_pairs.txt` and reruns Cell Ranger.
 
 ## zUMIs
