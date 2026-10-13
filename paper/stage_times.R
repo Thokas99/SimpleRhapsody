@@ -9,6 +9,12 @@ stage_times_dir <- local({
 source(file.path(stage_times_dir, "..", "workflow", "src", "benchmark_stages.R"))
 STAGE_DATA_DIR <- file.path(stage_times_dir, "..", "workflow", "data")
 
+## Install rules run once; report rules do not run a tool. Both are left out
+## of the time and memory of an aligner. Matched by benchmark file name.
+is_install_rule <- function(file) grepl("_install\\.txt$", file)
+is_report_rule <- function(file) grepl("_report\\.txt$", file)
+is_tool_rule <- function(file) !is_install_rule(file) & !is_report_rule(file)
+
 ## Seconds of each benchmark file in bench_dir, by stem.
 benchmark_seconds <- function(bench_dir) {
     files <- list.files(bench_dir, pattern = "\\.txt$", full.names = TRUE)
@@ -45,7 +51,7 @@ stage_time_table <- function(bench_dir, aligners, data_dir = STAGE_DATA_DIR) {
     classified <- classify_benchmarks(bm$stem, stage_table)
     by_stage <- stage_times(classified, bm$seconds, aligners,
                             cwl_step_seconds(bench_dir), cwl_stage_table)
-    kept <- c(COMPARED_STAGES, "CWL overhead")
+    kept <- setdiff(c(COMPARED_STAGES, "CWL overhead"), "reporting")
     by_stage <- by_stage[by_stage$stage %in% kept & by_stage$seconds > 0, ]
     by_stage$stage <- factor(by_stage$stage, levels = kept)
     by_stage$pipeline <- factor(by_stage$pipeline, levels = aligners)
