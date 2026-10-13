@@ -425,7 +425,7 @@ run_simulation = function(opt) {
                                title = "Cell-barcode overlap (simulated)")
     }
     if (exists("p_mard", inherits = FALSE)) {
-        panels$D = p_mard + panel_theme +
+        panels$D = p_mard + labs(title = "Pseudobulk MARD") + panel_theme +
             theme(axis.text.x = element_text(angle = 30, hjust = 1),
                   aspect.ratio = 1)
     }
@@ -436,7 +436,7 @@ run_simulation = function(opt) {
                   aspect.ratio = 1)
     }
     if (exists("p_pcor", inherits = FALSE)) {
-        panels$G = p_pcor + panel_theme +
+        panels$G = p_pcor + labs(title = "Pseudobulk Pearson r") + panel_theme +
             theme(axis.text.x = element_text(angle = 30, hjust = 1),
                   aspect.ratio = 1)
     }
