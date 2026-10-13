@@ -3,6 +3,7 @@
 import glob
 import os
 import re
+import shutil
 import subprocess
 
 import pytest
@@ -67,3 +68,24 @@ def test_readme_lists_every_script():
     missing = [os.path.basename(path) for path in JOB_SCRIPTS
                if os.path.basename(path) not in readme]
     assert missing == []
+
+
+@pytest.mark.skipif(shutil.which('rsync') is None, reason='needs rsync')
+def test_archive_keeps_counts_and_leaves_alignments(tmp_path):
+    """The filters of 09_archive.sh, applied to a small output tree."""
+    filters = re.findall(r"--(?:include|exclude)='[^']+'",
+                         read(os.path.join(SLURM_DIR, '09_archive.sh')))
+    sample_dir = tmp_path / 'output' / 'run' / 'starsolo' / 's1'
+    kept = ['s1_starsolo_sce.rds', 's1_starsolo_sce_hdf5/assays.h5',
+            's1_starsolo_sce_hdf5/se.rds', 'descriptive_report.html']
+    left = ['Aligned.sortedByCoord.out.bam', 'Solo.out/Gene/raw/matrix.mtx']
+    for name in kept + left:
+        path = sample_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    subprocess.run(['rsync', '-a', '--prune-empty-dirs']
+                   + [f.replace("'", '') for f in filters]
+                   + [f'{tmp_path}/output/', f'{tmp_path}/archive/'], check=True)
+    archived = tmp_path / 'archive' / 'run' / 'starsolo' / 's1'
+    assert all((archived / name).exists() for name in kept)
+    assert not any((archived / name).exists() for name in left)
