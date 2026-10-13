@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Figure tables leave report rules out of time and memory.
+- `09_archive.sh` copies the HDF5 folders of the count objects and tag splits.
 - `generate_sce_sbg` waits for STARsolo, so the `sbg` object gets gene ids.
 - The UniverSC sandbox gets scipy 1.2.3; Cell Ranger failed with 0.18.1.
 - The paper rules read the `aligner` config key.
