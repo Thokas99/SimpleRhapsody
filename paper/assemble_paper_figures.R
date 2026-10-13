@@ -1593,12 +1593,12 @@ run_benchmarks = function(opt) {
     ## cutadapt step under each non-sbg aligner so totals include the same
     ## pre-alignment work that sbg already performs in its container.
     nonsbg_aligners = setdiff(aligners, "sbg")
-    cutadapt_rows = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file)]
+    cutadapt_rows = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file)]
     cutadapt_minutes = if (nrow(cutadapt_rows) > 0) sum(cutadapt_rows$minutes) else 0
     cutadapt_max_rss = if (nrow(cutadapt_rows) > 0)
         max(cutadapt_rows$max_rss_gb, na.rm = TRUE) else NA_real_
 
-    aligner_time = bm[pipeline %in% aligners & !is_install_rule(file),
+    aligner_time = bm[pipeline %in% aligners & is_tool_rule(file),
                       .(minutes = sum(minutes)), by = pipeline]
     time_segments = rbindlist(list(
         aligner_time[, .(pipeline, segment = "aligner", minutes)],
@@ -1611,7 +1611,7 @@ run_benchmarks = function(opt) {
     time_segments[, pipeline := order_pipelines(pipeline)]
     pipe_time = time_segments[, .(total_min = sum(minutes)), by = pipeline]
 
-    pipe_mem = bm[pipeline %in% aligners & !is_install_rule(file),
+    pipe_mem = bm[pipeline %in% aligners & is_tool_rule(file),
                   .(peak_rss_gb = max(max_rss_gb, na.rm = TRUE)), by = pipeline]
     if (!is.na(cutadapt_max_rss) && length(nonsbg_aligners) > 0) {
         pipe_mem[pipeline %in% nonsbg_aligners,
@@ -1712,19 +1712,14 @@ load_benchmarks = function(bench_dir, aligners) {
     bm[]
 }
 
-## One-off source-compilation rules matched by benchmark file name. Excluded
-## from per-pipeline totals so figures reflect per-run cost rather than the
-## first-invocation install cost.
-is_install_rule = function(file) grepl("_install\\.txt$", file)
-
 ## Add the shared cutadapt CB/UMI standardization step to non-sbg aligner totals
 ## so figures compare like-for-like against sbg, whose CWL ingests raw fastqs and
 ## demultiplexes internally.
 load_pipeline_time = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    out = bm[pipeline %in% aligners & !is_install_rule(file),
+    out = bm[pipeline %in% aligners & is_tool_rule(file),
              .(total_min = sum(minutes)), by = pipeline]
-    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           sum(minutes)]
     nonsbg = setdiff(aligners, "sbg")
     if (length(nonsbg) > 0 && length(cutadapt_minutes) > 0 && cutadapt_minutes > 0) {
@@ -1735,9 +1730,9 @@ load_pipeline_time = function(bench_dir, aligners) {
 
 load_pipeline_memory = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    out = bm[pipeline %in% aligners & !is_install_rule(file),
+    out = bm[pipeline %in% aligners & is_tool_rule(file),
              .(peak_rss_gb = max(max_rss_gb, na.rm = TRUE)), by = pipeline]
-    cutadapt_max_rss = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_max_rss = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           max(max_rss_gb, na.rm = TRUE)]
     nonsbg = setdiff(aligners, "sbg")
     if (length(nonsbg) > 0 && is.finite(cutadapt_max_rss)) {
@@ -1751,9 +1746,9 @@ load_pipeline_memory = function(bench_dir, aligners) {
 ## the cutadapt fraction can be drawn as a stacked segment on the time bar.
 load_pipeline_time_segments = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    aligner_time = bm[pipeline %in% aligners & !is_install_rule(file),
+    aligner_time = bm[pipeline %in% aligners & is_tool_rule(file),
                       .(minutes = sum(minutes)), by = pipeline]
-    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           sum(minutes)]
     nonsbg = setdiff(aligners, "sbg")
     out = aligner_time[, .(pipeline, segment = "aligner", minutes)]
