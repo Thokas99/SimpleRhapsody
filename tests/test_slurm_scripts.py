@@ -77,7 +77,8 @@ def test_archive_keeps_counts_and_leaves_alignments(tmp_path):
                          read(os.path.join(SLURM_DIR, '09_archive.sh')))
     sample_dir = tmp_path / 'output' / 'run' / 'starsolo' / 's1'
     kept = ['s1_starsolo_sce.rds', 's1_starsolo_sce_hdf5/assays.h5',
-            's1_starsolo_sce_hdf5/se.rds', 'descriptive_report.html']
+            's1_starsolo_sce_hdf5/se.rds', 'by_sampletag/tag_1/assays.h5',
+            'by_sampletag/tag_1/se.rds', 'descriptive_report.html']
     left = ['Aligned.sortedByCoord.out.bam', 'Solo.out/Gene/raw/matrix.mtx']
     for name in kept + left:
         path = sample_dir / name

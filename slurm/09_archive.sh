@@ -14,7 +14,7 @@ mkdir -p "$destination"
 
 rsync -a --prune-empty-dirs \
     --include='*/' --include='*.html' --include='*_sce.rds' --include='*_hdf5/***' \
-    --include='*.h5ad' \
+    --include='by_sampletag/***' --include='*.h5ad' \
     --include='run_info.tsv' --include='benchmarks/***' --include='paper/***' \
     --include='logs/***' --exclude='*' \
     output/ "$destination/"
