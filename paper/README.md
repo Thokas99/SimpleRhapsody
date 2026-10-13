@@ -102,8 +102,10 @@ UniverSC rewrites the Cell Ranger whitelist inside its image, so `universc/run_u
 
 ```bash
 apptainer build --sandbox universc_sandbox docker://tomkellygenetics/universc:1.2.7
+apptainer exec --writable universc_sandbox python2.7 -m pip install scipy==1.2.3
 ```
 
+- scipy: the image has 0.18.1, and the `FILTER_BARCODES` stage of Cell Ranger fails with it on the epidermis sample. The sandbox gets 1.2.3, the last release for Python 2.7.
 - Config: `universc_sandbox` and `universc_technology` (`bd-rhapsody` or `bd-rhapsody-v2`).
 - Target: `<working_dir>/universc/<sample>/<sample>_universc_sce.rds`, from the downsampled reads.
 - Enhanced V2 beads: UniverSC 1.2.7 has no whitelist for the 384-sequence panel.

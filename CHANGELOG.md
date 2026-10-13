@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The UniverSC sandbox gets scipy 1.2.3; Cell Ranger failed with 0.18.1.
 - The paper rules read the `aligner` config key.
 - The benchmarks report waits for the tag splits and the simulation validation.
 - `validate_simulation` counts as simulation in the stage times.
