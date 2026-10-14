@@ -45,7 +45,7 @@ def run_fetch(tmp_path, truncate_mate=''):
     result = subprocess.run(
         ['snakemake', '--snakefile', os.path.join(REPO_ROOT, 'workflow', 'Snakefile'),
          '--configfile', os.path.join(REPO_ROOT, 'configs', 'moro_mallona2025_config.yaml'),
-         '--config', f'working_dir={tmp_path}', 'nthreads=1',
+         '--config', f'working_dir={tmp_path}', 'nthreads=1', "aligner=['starsolo']",
          '--nolock', '--cores', '1', str(outdir / f'{SAMPLE}_R1.fastq.gz')],
         cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
     return result, outdir
