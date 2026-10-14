@@ -99,13 +99,12 @@ if config.get('use_simulated', False):
             sce      = op.join(config['working_dir'], 'starsolo', _sim_sample,
                                f'{_sim_sample}_starsolo_sce.rds'),
             barcodes = op.join(_SIM_DIR, 'cell_barcodes.txt'),
+            true_mex = op.join(_SIM_DIR, 'true_mex', 'matrix.mtx.gz'),
             script   = op.join(workflow.basedir, 'src', 'validate_simulation.Rmd')
         output:
             html = op.join(config['working_dir'], 'simulation_validation.html')
         params:
-            n_cells = config.get('sim_n_cells', 100),
-            n_genes = config.get('sim_n_genes', 100),
-            n_umis  = config.get('sim_n_umis',  100)
+            n_cells = config.get('sim_n_cells', 100)
         log:
             op.join(config['working_dir'], 'logs', 'validate_simulation.log')
         benchmark:
@@ -119,7 +118,6 @@ if config.get('use_simulated', False):
                   params = list(
                       sce_path      = "{input.sce}",
                       barcodes_path = "{input.barcodes}",
-                      n_cells       = {params.n_cells},
-                      n_genes       = {params.n_genes},
-                      n_umis        = {params.n_umis}))' &> {log}
+                      true_mex_dir  = "$(dirname {input.true_mex})",
+                      n_cells       = {params.n_cells}))' &> {log}
             """
