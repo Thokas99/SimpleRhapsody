@@ -2,3 +2,5 @@
 .snakemake
 output
 third_party
+slurm/site.env
+site
