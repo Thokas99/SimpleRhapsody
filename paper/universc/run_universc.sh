@@ -24,12 +24,15 @@ if [ ! -d "$sandbox/universc" ]; then
     exit 1
 fi
 
-mkdir -p "$workdir/${sample}_fastq" "$sandbox/work" "$sandbox/reads" "$sandbox/reference" "$sandbox/job_tmp"
+## each input folder gets its own mount point, so inputs may sit in different folders
+mkdir -p "$workdir/${sample}_fastq" "$sandbox/work" "$sandbox/reads" "$sandbox/reads2" \
+    "$sandbox/reference" "$sandbox/annotation" "$sandbox/job_tmp"
 ln -sf "/reads/$(basename "$r1")" "$workdir/${sample}_fastq/${sample}_S1_L001_R1_001.fastq.gz"
-ln -sf "/reads/$(basename "$r2")" "$workdir/${sample}_fastq/${sample}_S1_L001_R2_001.fastq.gz"
+ln -sf "/reads2/$(basename "$r2")" "$workdir/${sample}_fastq/${sample}_S1_L001_R2_001.fastq.gz"
 
 apptainer exec --writable \
-    -B "$workdir:/work" -B "$(dirname "$r1"):/reads" -B "$(dirname "$genome"):/reference" \
+    -B "$workdir:/work" -B "$(dirname "$r1"):/reads" -B "$(dirname "$r2"):/reads2" \
+    -B "$(dirname "$genome"):/reference" -B "$(dirname "$gtf"):/annotation" \
     -B "${TMPDIR:-/tmp}:/job_tmp" \
     "$sandbox" bash -s "$sample" "$technology" "$(basename "$genome")" "$(basename "$gtf")" \
     "$cores" "$mem_gb" <<'IN_CONTAINER'
@@ -43,7 +46,7 @@ cd /work
 
 if [ ! -f reference/reference.json ]; then
     cellranger mkref --genome=reference --fasta="/reference/$genome" \
-        --genes="/reference/$gtf" --nthreads="$cores" --memgb="$mem_gb" > mkref.log 2>&1
+        --genes="/annotation/$gtf" --nthreads="$cores" --memgb="$mem_gb" > mkref.log 2>&1
 fi
 
 ## outputs of an earlier run would pass the checks below
