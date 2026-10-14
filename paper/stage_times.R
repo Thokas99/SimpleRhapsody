@@ -28,6 +28,23 @@ benchmark_seconds <- function(bench_dir) {
                stringsAsFactors = FALSE)[!is.na(seconds), ]
 }
 
+## Seconds of each step not covered by steps that started earlier, so that
+## concurrent steps add up to the wall-clock time they span. The recorded
+## seconds are kept when start and end are not timestamps.
+exclusive_seconds <- function(start, end, seconds) {
+    time_format <- "%Y-%m-%d %H:%M:%S"
+    start_time <- as.numeric(as.POSIXct(start, format = time_format, tz = "UTC"))
+    end_time <- as.numeric(as.POSIXct(end, format = time_format, tz = "UTC"))
+    if (anyNA(start_time) || anyNA(end_time)) return(seconds)
+    exclusive <- numeric(length(seconds))
+    covered_until <- -Inf
+    for (i in order(start_time)) {
+        exclusive[i] <- max(0, end_time[i] - max(start_time[i], covered_until))
+        covered_until <- max(covered_until, end_time[i])
+    }
+    exclusive
+}
+
 ## BD CWL step times written next to the benchmark files, or NULL.
 cwl_step_seconds <- function(bench_dir) {
     files <- list.files(bench_dir, pattern = "^sbg_cwl_steps_.*\\.tsv$", full.names = TRUE)
@@ -37,7 +54,9 @@ cwl_step_seconds <- function(bench_dir) {
         steps <- steps[!is.na(steps$seconds), ]
         if (nrow(steps) == 0) return(NULL)
         data.frame(sample = sub("^sbg_cwl_steps_(.*)\\.tsv$", "\\1", basename(fn)),
-                   step = steps$step, seconds = steps$seconds, stringsAsFactors = FALSE)
+                   step = steps$step,
+                   seconds = exclusive_seconds(steps$start, steps$end, steps$seconds),
+                   stringsAsFactors = FALSE)
     }))
     if (is.null(rows) || nrow(rows) == 0) NULL else rows
 }

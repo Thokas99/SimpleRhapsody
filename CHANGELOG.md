@@ -34,7 +34,7 @@
 
 - Configs for GSE282765, GSE301173, the epidermis at 40% of the reads, both datasets at 1 and 2 linker mismatches, and sparse simulation.
 - `paper/`: comparison with UniverSC, zUMIs and OpenPipelines, linker tolerance and sample tag calls.
-- Figure tables add time per stage, scaled MARD and Spearman; report rules are left out of time and memory.
+- Figure tables add time per stage, scaled MARD and Spearman; report rules are left out of time and memory; concurrent CWL steps count once.
 - `slurm/`: one job script per run, on one CPU model, and an archive step.
 
 ## v0.3.0 - 2026-06-29
