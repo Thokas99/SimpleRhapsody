@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `fetch_sra` tests the compressed reads and fails on a truncated file.
 - Figure tables leave report rules out of time and memory.
 - `09_archive.sh` copies the HDF5 folders of the count objects and tag splits.
 - `generate_sce_sbg` waits for STARsolo, so the `sbg` object gets gene ids.
