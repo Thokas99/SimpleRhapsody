@@ -63,7 +63,7 @@ flowchart TD
 
 ## Quickstart
 
-Install the CLI (optional):
+Install the CLI (optional), in editable mode so it finds the workflow files of the clone:
 
 ```
 pip install -e .

@@ -8,7 +8,7 @@ cd rhapsodist
 pip install -e .
 ```
 
-Snakemake creates the conda environments of the workflow at the first run.
+Install in editable mode (`-e`): `rhapsodist` runs the workflow files of the clone, which a regular `pip install .` does not copy. Snakemake creates the conda environments of the workflow at the first run.
 
 ## Containers
 
