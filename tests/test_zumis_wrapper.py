@@ -56,3 +56,10 @@ def test_successful_run_keeps_its_count_table(tmp_path):
     result, counts = run_wrapper(tmp_path, body)
     assert result.returncode == 0, result.stderr
     assert counts.read_text() == 'new\n'
+
+
+def test_nonzero_exit_with_a_count_table_fails(tmp_path):
+    body = 'mkdir -p zUMIs_output/expression\necho partial > zUMIs_output/expression/s.dgecounts.rds\nexit 2\n'
+    result, _ = run_wrapper(tmp_path, body)
+    assert result.returncode != 0
+    assert 'exited with 2' in result.stderr
