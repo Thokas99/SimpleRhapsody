@@ -35,6 +35,8 @@ cat(sprintf('Count matrix dimensions: %d genes x %d cells\n', nrow(mat), ncol(ma
 
 truth <- readMM(gzfile(file.path(params$true_mex_dir, 'matrix.mtx.gz')))
 colnames(truth) <- readLines(gzfile(file.path(params$true_mex_dir, 'barcodes.tsv.gz')))
+rownames(truth) <- read.table(gzfile(file.path(params$true_mex_dir, 'features.tsv.gz')),
+                              sep = '\t')$V1
 ```
 
 # Cell recovery
@@ -82,6 +84,26 @@ if (length(shared) > 0) {
 }
 ```
 
+# Counts per gene and cell
+
+Recovered counts are compared with the simulated counts entry by entry, on the
+shared barcodes; a simulated gene missing from the recovered matrix counts as
+zeros. The difference is the sum of absolute differences over the simulated
+total, and passes within 1 %.
+
+```{r entries}
+recovered_aligned <- matrix(0, nrow(truth), length(shared),
+                            dimnames = list(rownames(truth), shared))
+in_both <- intersect(rownames(truth), rownames(mat))
+recovered_aligned[in_both, ] <- as.matrix(mat[in_both, shared, drop = FALSE])
+truth_shared <- as.matrix(truth[, shared, drop = FALSE])
+entry_difference <- sum(abs(recovered_aligned - truth_shared)) / max(sum(truth_shared), 1)
+entries_pass <- length(shared) > 0 && entry_difference <= 0.01
+
+cat(sprintf('Gene by cell counts: %d genes in both, difference %.4f of the simulated total: %s\n',
+            length(in_both), entry_difference, ifelse(entries_pass, 'PASS', 'FAIL')))
+```
+
 # Barcode recovery
 
 ```{r barcodes}
@@ -99,6 +121,7 @@ cat(sprintf('%d / %d recovered barcodes match simulated whitelist: %s\n',
 pass <- n_recovered == expected_cells &&
     n_genes_detected == expected_genes &&
     umis_pass &&
+    entries_pass &&
     n_matched == length(recovered_barcodes)
 
 cat(sprintf('\nOverall validation: %s\n', if (pass) 'PASS' else 'FAIL'))
