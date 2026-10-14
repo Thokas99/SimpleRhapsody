@@ -58,8 +58,9 @@ def test_complete_reads_are_kept_compressed(tmp_path):
     assert not (outdir / f'{SRA_RUN}_1.fastq').exists()
 
 
-def test_truncated_reads_fail_and_keep_fastq(tmp_path):
-    result, outdir = run_fetch(tmp_path, truncate_mate='2')
+@pytest.mark.parametrize('mate', ['1', '2'])
+def test_truncated_reads_fail_and_keep_fastq(tmp_path, mate):
+    result, outdir = run_fetch(tmp_path, truncate_mate=mate)
     assert result.returncode != 0
     assert (outdir / f'{SRA_RUN}_1.fastq').exists()
     assert (outdir / f'{SRA_RUN}_2.fastq').exists()

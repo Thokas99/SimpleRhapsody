@@ -118,7 +118,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: snakemake
-          create-args: python=3.12 snakemake pytest pyyaml
+          create-args: python=3.12 snakemake pytest pyyaml pigz
           condarc: |
             channels:
               - conda-forge
@@ -126,6 +126,9 @@ jobs:
 
       - name: dry-run the paper Snakefile for the figure job configs
         run: pytest -o addopts="" -p no:cacheprovider tests/test_paper_dry_run.py
+
+      - name: run fetch_sra on stub SRA tools
+        run: pytest -o addopts="" -p no:cacheprovider tests/test_fetch_sra.py
 
       - name: dry-run simulation workflow
         run: |
