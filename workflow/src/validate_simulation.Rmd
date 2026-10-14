@@ -98,7 +98,8 @@ cat(sprintf('%d / %d recovered barcodes match simulated whitelist: %s\n',
 ```{r summary}
 pass <- n_recovered == expected_cells &&
     n_genes_detected == expected_genes &&
-    umis_pass
+    umis_pass &&
+    n_matched == length(recovered_barcodes)
 
 cat(sprintf('\nOverall validation: %s\n', if (pass) 'PASS' else 'FAIL'))
 ```
