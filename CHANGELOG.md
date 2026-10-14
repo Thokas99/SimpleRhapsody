@@ -2,10 +2,8 @@
 
 ## Unreleased
 
-### Tool
+### Tool: feature requests
 
-- Rules stop at the first failing command.
-- `fetch_sra` fails on a truncated compressed read file.
 - Samples accept a separate sample tag library: `sampletag_cb_umi_fq`, `sampletag_cdna_fq` or `sampletag_sra_run`.
 - `soloCBmatchWLtype` config field, default `1MM_multi` as before.
 - `use_case: trajectory` in the biology report adds pseudotime agreement between aligners.
@@ -13,17 +11,23 @@
 - The comparison report lists barcode correction counts per aligner.
 - The benchmarks report gives time per stage and aligner, BD CWL step times, threads and the machine record from `run_info.tsv`.
 - The simulator adds `sim_min_count` (default 1) and `sim_separate_sampletags`.
+- `Dockerfile` and `rhapsodist.def`: image with the pinned environments; Docker runs as the host user.
+- `biology_markers_file` may be relative to `workflow/`.
+- README sections on aligner choice and cell filter choice.
+- Requires Snakemake 8.12 or later.
+
+### Tool: fixes
+
+- Rules stop at the first failing command.
+- `fetch_sra` fails on a truncated compressed read file.
 - The simulation validation compares counts with the simulated matrix.
 - The `sbg` object gets the gene ids of STARsolo.
-- `Dockerfile` and `rhapsodist.def`: image with the pinned environments; Docker runs as the host user.
+- Reports render in a temporary folder, so read-only images work.
 - `pip install` works; `rhapsodist --config` reaches Snakemake.
 - No rule needs a system `pigz` or `gawk`.
 - The BD CWL rule pulls its image with apptainer 1.5.
 - `derive_observed_whitelist` uses one thread.
-- `biology_markers_file` may be relative to `workflow/`.
 - `get_txp2gene` fails on an empty table.
-- README sections on aligner choice and cell filter choice.
-- Requires Snakemake 8.12 or later.
 
 ### Draft
 
