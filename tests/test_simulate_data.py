@@ -411,3 +411,9 @@ def test_main_writes_separate_sampletag_fastqs(tmp_path, monkeypatch):
     assert len(st_r1) == 4 * 5
     assert st_r1 == st_r2
     assert all(h.startswith('@st') for h in st_r1)
+
+
+def test_rerun_does_not_duplicate_separate_sampletag_reads(tmp_path, monkeypatch):
+    _run_main(monkeypatch, tmp_path, '--separate_sampletag_fastqs')
+    _run_main(monkeypatch, tmp_path, '--separate_sampletag_fastqs')
+    assert len(_fastq_headers(tmp_path / 'sim_st_R1.fq.gz')) == 4 * 5

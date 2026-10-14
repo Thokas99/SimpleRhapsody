@@ -393,6 +393,12 @@ def main():
     if args.sampletag_fa:
         sampletags = read_sampletag_fasta(args.sampletag_fa, args.n_sampletags)
         st_prefix = 'sim_st' if args.separate_sampletag_fastqs else 'sim'
+        if args.separate_sampletag_fastqs:
+            ## the tag reads are appended, so files of an earlier run are removed first
+            for mate in ('R1', 'R2'):
+                path = os.path.join(args.out_dir, f'{st_prefix}_{mate}.fq.gz')
+                if os.path.exists(path):
+                    os.remove(path)
         append_sampletag_fastqs(cell_barcodes, sampletags, args.n_st_reads, rng,
                                 os.path.join(args.out_dir, st_prefix + '_R1.fq.gz'),
                                 os.path.join(args.out_dir, st_prefix + '_R2.fq.gz'),
