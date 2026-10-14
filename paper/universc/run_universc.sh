@@ -46,6 +46,9 @@ if [ ! -f reference/reference.json ]; then
         --genes="/reference/$gtf" --nthreads="$cores" --memgb="$mem_gb" > mkref.log 2>&1
 fi
 
+## outputs of an earlier run would pass the checks below
+rm -rf "$sample" "${sample}_fixed" "${sample}_fixed_fastq" "${sample}_outs" "${sample}_dropped_pairs.txt"
+
 bash /universc/launch_universc.sh -t "$technology" \
     -R1 "${sample}_fastq/${sample}_S1_L001_R1_001.fastq.gz" \
     -R2 "${sample}_fastq/${sample}_S1_L001_R2_001.fastq.gz" \

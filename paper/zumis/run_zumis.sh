@@ -100,6 +100,8 @@ make_stats: yes
 which_Stage: Filtering
 YAML
 
+## a count table of an earlier run would pass the check below
+rm -f "zUMIs_output/expression/${sample}.dgecounts.rds"
 bash "$zumis_dir/zUMIs.sh" -c -y "${sample}.yaml" > "${sample}_zumis.log" 2>&1 || true
 if [ ! -s "zUMIs_output/expression/${sample}.dgecounts.rds" ]; then
     echo "zUMIs wrote no count table, see $workdir/${sample}_zumis.log" >&2
