@@ -6,5 +6,7 @@ USER root
 COPY . /opt/rhapsodist
 WORKDIR /opt/rhapsodist
 RUN bash container_build.sh
+## micromamba run needs a writable home when run as docker run --user "$(id -u):$(id -g)" -e USER="$USER"
+ENV HOME=/tmp
 WORKDIR /work
 ENTRYPOINT ["micromamba", "run", "-n", "base", "rhapsodist"]

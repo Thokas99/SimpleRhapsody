@@ -104,6 +104,7 @@ if config.get('use_simulated', False):
         output:
             html = op.join(config['working_dir'], 'simulation_validation.html')
         params:
+            true_mex_dir = op.join(_SIM_DIR, 'true_mex'),
             n_cells = config.get('sim_n_cells', 100)
         log:
             op.join(config['working_dir'], 'logs', 'validate_simulation.log')
@@ -115,9 +116,10 @@ if config.get('use_simulated', False):
               'rmarkdown::render(
                   "{input.script}",
                   output_file  = "{output.html}",
+                  intermediates_dir = tempdir(),
                   params = list(
                       sce_path      = "{input.sce}",
                       barcodes_path = "{input.barcodes}",
-                      true_mex_dir  = "$(dirname {input.true_mex})",
+                      true_mex_dir  = "{params.true_mex_dir}",
                       n_cells       = {params.n_cells}))' &> {log}
             """
