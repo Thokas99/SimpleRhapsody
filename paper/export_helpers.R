@@ -126,7 +126,7 @@ pp_save_rank_agreement = function(pb_mat, pdir, prefix) {
     scaled = pp_pairwise_table(pb_mat, scaled_mard, "scaled_mard")
     pp_save_csv(scaled, pdir, paste0(prefix, "_scaled_mard"))
     pp_save_pdf(pp_pairwise_heatmap(scaled, "scaled_mard", "Pseudobulk MARD on counts per million",
-                                    "%.3f", c(0, 1)),
+                                    "%.3f", c(0, 2)),
                 pdir, paste0(prefix, "_scaled_mard"), width = 4.5, height = 3.5)
     rho = pp_pairwise_table(pb_mat, spearman, "spearman")
     pp_save_csv(rho, pdir, paste0(prefix, "_spearman"))

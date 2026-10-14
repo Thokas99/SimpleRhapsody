@@ -2,8 +2,8 @@
 """Per-step wall-clock times from a cwltool log written with --timestamps.
 
 A scattered step logs one start line per job and one completion line, so a step
-runs from its first start to its last completion. Steps of nested workflows are
-listed like any other step.
+runs from its first start to its last completion. Only top-level steps are
+listed: a nested workflow is timed as its own step, not as its inner steps.
 """
 
 import argparse
@@ -15,6 +15,7 @@ STEP_EVENT = re.compile(
     r'^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \w+ '
     r'\[step (?P<step>[^\]]+)\] (?P<event>start|completed (?P<status>\w+))$'
 )
+NESTED_STEP = re.compile(r'\[workflow [^\]\s][^\]]*\] starting step (?P<step>\S+)$')
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
@@ -24,8 +25,13 @@ def parse_step_times(lines):
     A step with no completion line keeps an empty end, seconds and status.
     """
     steps = {}
+    nested = set()
     for line in lines:
-        match = STEP_EVENT.match(ANSI_ESCAPE.sub('', line).strip())
+        line = ANSI_ESCAPE.sub('', line).strip()
+        nested_match = NESTED_STEP.search(line)
+        if nested_match:
+            nested.add(nested_match['step'])
+        match = STEP_EVENT.match(line)
         if not match:
             continue
         record = steps.setdefault(
@@ -41,7 +47,7 @@ def parse_step_times(lines):
             elapsed = (datetime.strptime(record['end'], TIME_FORMAT)
                        - datetime.strptime(record['start'], TIME_FORMAT))
             record['seconds'] = int(elapsed.total_seconds())
-    return list(steps.values())
+    return [record for name, record in steps.items() if name not in nested]
 
 
 def write_step_times(records, path):

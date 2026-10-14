@@ -919,7 +919,7 @@ rule derive_observed_whitelist:
     output:
         observed_whitelist = op.join(config['working_dir'], 'data', '{sample}_observed_whitelist.txt')
     threads:
-        workflow.cores
+        1
     log:
         op.join(config['working_dir'], 'logs', '{sample}_derive_observed_whitelist.log')
     benchmark:

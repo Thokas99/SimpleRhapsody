@@ -99,7 +99,7 @@ ggplot(bm_steps, aes(x = reorder(step, minutes), y = minutes, fill = pipeline)) 
 Only steps assigned to a single pipeline (not "shared") are summed.
 
 ```{r runtime-per-pipeline, fig.width=7, fig.height=4}
-pipeline_time <- bm_steps[, .(minutes = max(minutes)), by = .(step, pipeline)]
+pipeline_time <- bm_steps[, .(minutes = max(minutes)), by = .(stem, pipeline)]
 pipeline_sum  <- pipeline_time[, .(total_min = sum(minutes)), by = pipeline]
 pipeline_sum[, pipeline := factor(pipeline,
     levels = c("shared", "starsolo", "kallisto", "alevin", "sbg"))]
