@@ -75,6 +75,8 @@ def parse_args():
     args = p.parse_args()
     if args.min_count < 0:
         p.error('--min_count must be 0 or more')
+    if args.min_count > 4 ** 8:
+        p.error('--min_count must be at most 65536, the number of 8 nt UMIs')
     return args
 
 
@@ -83,6 +85,8 @@ def rand_seq(length, rng):
 
 
 def unique_sequences(n, length, rng):
+    if n > 4 ** length:
+        raise ValueError(f'{n} unique sequences of length {length} do not exist')
     seen, seqs = set(), []
     while len(seqs) < n:
         s = rand_seq(length, rng)

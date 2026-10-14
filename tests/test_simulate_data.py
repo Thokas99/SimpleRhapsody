@@ -59,6 +59,19 @@ def test_unique_sequences_are_unique(rng):
     assert len(set(seqs)) == 20
 
 
+def test_unique_sequences_beyond_the_sequence_space_fail(rng):
+    with pytest.raises(ValueError):
+        unique_sequences(17, 2, rng)
+
+
+def test_min_count_beyond_the_umi_space_is_rejected(monkeypatch, capsys):
+    monkeypatch.setattr('sys.argv', ['simulate_data.py', '--whitelist_dir', 'x', '--out_dir', 'x',
+                                     '--min_count', '65537'])
+    with pytest.raises(SystemExit):
+        parse_args()
+    assert '65536' in capsys.readouterr().err
+
+
 def test_unique_sequences_length(rng):
     seqs = unique_sequences(5, 12, rng)
     assert all(len(s) == 12 for s in seqs)

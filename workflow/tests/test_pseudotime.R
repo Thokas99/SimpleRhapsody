@@ -50,6 +50,12 @@ check("cells not connected to the root get NA", all(is.na(pseudotime_groups[51:5
 check("connected cells keep their pseudotime",
       isTRUE(all.equal(pseudotime_groups[1:50], pseudotime)))
 
+## duplicate embeddings: every distance is zero
+same <- matrix(0, nrow = 5, ncol = 2)
+nn_same <- nearest_neighbours(same, k = 3)
+check("zero distances give pseudotime 0, not NaN",
+      all(graph_pseudotime(nn_same$index, nn_same$distance, 1) == 0))
+
 clusters <- ifelse(position < 2, "early", ifelse(position < 7, "middle", "late"))
 root_score <- 10 - position
 picked <- root_cell(line, clusters, root_score)

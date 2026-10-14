@@ -25,7 +25,8 @@ graph_pseudotime <- function(nn_index, nn_distance, root) {
     from_root <- as.vector(igraph::distances(graph, v = root,
                                              weights = igraph::E(graph)$weight))
     from_root[is.infinite(from_root)] <- NA
-    from_root / max(from_root, na.rm = TRUE)
+    longest <- max(from_root, na.rm = TRUE)
+    if (longest == 0) from_root else from_root / longest
 }
 
 ## Spearman correlation of pseudotime for every pair of columns, each pair on
