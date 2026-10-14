@@ -1238,6 +1238,7 @@ rule render_sampletag_report:
         R --vanilla -e \
           'rmarkdown::render("{input.script}",
             output_file = "{output.html}",
+            intermediates_dir = tempdir(),
             params = list(
               demux_path       = "{input.demux}",
               assignments_path = "{params.assignments}"))' &> {log}
@@ -2060,6 +2061,7 @@ rule render_comparison_report:
           rmarkdown::render(
             "{input.doc}",
             output_file  = "{output.html}",
+            intermediates_dir = tempdir(),
             params = list(
               working_dir      = "{params.working_dir}",
               sample           = "{params.sample}",
@@ -2132,6 +2134,7 @@ rule render_biology_report:
           rmarkdown::render(
             "{input.doc}",
             output_file = "{output.html}",
+            intermediates_dir = tempdir(),
             params = list(
               working_dir = "{params.working_dir}",
               sample = "{params.sample}",
@@ -2190,6 +2193,7 @@ rule render_benchmarks_report:
           rmarkdown::render(
             "{input.doc}",
             output_file  = "{output.html}",
+            intermediates_dir = tempdir(),
             params = list(
               working_dir      = "{params.working_dir}",
               n_expected_cells = {params.n_expected_cells}))' &> {log}
@@ -2216,6 +2220,7 @@ rule render_linker_qc_report:
           rmarkdown::render(
             "{input.doc}",
             output_file = "{output.html}",
+            intermediates_dir = tempdir(),
             params = list(
               sample = "{params.sample}",
               tsv    = "{input.tsv}"))' &> {log}
