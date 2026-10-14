@@ -330,7 +330,7 @@ cb_umi_max_errors: 1
 BD Rhapsody sample tags (sample multiplexing) ride in the same WTA library as the cDNA reads, so there is no separate sample tag FASTQ to point at. The pipeline extracts sample tag reads from the WTA reads that do not map to the transcriptome, aligns them to the bundled tag sequences in `workflow/data/sampletags/{species}_sampletags.fa`, and demultiplexes. You only need to enable it and set the species:
 
 ```yaml
-skip_sampletags: false     # global switch; true (default) skips tag demultiplexing
+skip_sampletags: false     # default; true skips tag demultiplexing
 samples:
   - name: my_sample
     uses:
@@ -405,7 +405,7 @@ downsample: 10           # use 10% of reads
 ### Reports
 
 ```yaml
-skip_sampletags: true          # skip sampletag demultiplexing
+skip_sampletags: true          # skip sampletag demultiplexing (default false)
 run_biology_report: true       # generate biology report with marker expression, clustering, cross-pipeline concordance
 biology_markers_file: data/markers/skin_markers.tsv   # TSV with marker and cell_type columns, relative to workflow dir
 ```

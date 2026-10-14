@@ -44,7 +44,7 @@ rhapsodist --configfile my_config.yaml --cores 10
 Run from the directory that holds your config; outputs are written there.
 
 ```
-docker run --rm -v "$PWD":/work rhapsodist --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir=/work/output/simul --cores 4
+docker run --rm --user "$(id -u):$(id -g)" -e USER="$USER" -v "$PWD":/work rhapsodist --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir=/work/output/simul --cores 4
 
 apptainer run rhapsodist.sif --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir="$PWD/output/simul" --cores 4
 ```
