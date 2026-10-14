@@ -22,7 +22,7 @@
 - `fetch_sra` fails on a truncated compressed read file.
 - The simulation validation compares counts per gene and cell with the simulated matrix.
 - The benchmarks report renders with one aligner.
-- The `sbg` object gets the gene ids of STARsolo.
+- The `sbg` object gets the gene ids of STARsolo; a symbol shared by several gene ids keeps its name.
 - Reports render in a temporary folder, so read-only images work.
 - `pip install` works; `rhapsodist --config` reaches Snakemake.
 - No rule needs a system `pigz` or `gawk`.

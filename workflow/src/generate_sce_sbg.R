@@ -97,17 +97,20 @@ SummarizedExperiment::rowData(sce)$name <- features$V1
 colnames(sce) <- sapply(colnames(sce), index_to_sequence,
                         bead_version = args$bead_version)
 
-## Remap symbols to Ensembl IDs via STARsolo features.tsv; make.unique
-## guards against duplicate rownames from many-to-one mappings.
-if (!is.null(args$features_map) && file.exists(args$features_map)) {
+## Remap symbols to Ensembl IDs via STARsolo features.tsv (gene_id, gene_name).
+## A symbol shared by several gene ids keeps its name: its counts cannot be
+## given to one id. make.unique guards against duplicate rownames.
+if (!is.null(args$features_map)) {
+    if (!file.exists(args$features_map)) stop('features_map not found: ', args$features_map)
     feat <- read.table(args$features_map, header = FALSE, sep = '\t',
-                       stringsAsFactors = FALSE)
-    ## col 1 = gene_id (Ensembl), col 2 = gene_name (symbol)
-    name_to_id <- setNames(feat$V1, feat$V2)
-    remapped <- name_to_id[rownames(sce)]
+                       stringsAsFactors = FALSE, quote = '')
+    ids_per_name <- table(feat$V2)
+    one_id <- feat[feat$V2 %in% names(ids_per_name)[ids_per_name == 1], ]
+    remapped <- setNames(one_id$V1, one_id$V2)[rownames(sce)]
     valid <- !is.na(remapped)
-    cat(sprintf('Gene symbol remapping: %d / %d genes matched to Ensembl IDs\n',
-                sum(valid), nrow(sce)))
+    shared_symbol <- rownames(sce) %in% names(ids_per_name)[ids_per_name > 1]
+    cat(sprintf('Gene symbol remapping: %d / %d genes matched to Ensembl IDs; %d symbols kept, shared by several gene ids\n',
+                sum(valid), nrow(sce), sum(shared_symbol)))
     new_rn <- rownames(sce)
     new_rn[valid] <- remapped[valid]
     rownames(sce) <- make.unique(new_rn)

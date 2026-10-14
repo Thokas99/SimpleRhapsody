@@ -1,5 +1,5 @@
-"""Dry runs of workflow/Snakefile: generate_sce_sbg waits for the STARsolo
-counts, whose features.tsv gives the gene ids of the sbg object."""
+"""Dry runs of workflow/Snakefile: generate_sce_sbg reads the STARsolo
+features.tsv, which gives the gene ids of the sbg object."""
 
 import os
 import re
@@ -9,8 +9,8 @@ import subprocess
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STARSOLO_COUNTS = os.path.join('starsolo', 'simulated', 'Solo.out', 'Gene', 'filtered',
-                               'matrix.mtx')
+STARSOLO_FEATURES = os.path.join('starsolo', 'simulated', 'Solo.out', 'Gene', 'filtered',
+                                 'features.tsv')
 
 pytestmark = pytest.mark.skipif(shutil.which('snakemake') is None, reason='needs snakemake')
 
@@ -30,7 +30,7 @@ def sbg_object_inputs(aligners, directory):
 
 def test_sbg_object_waits_for_starsolo(tmp_path):
     inputs = sbg_object_inputs(['starsolo', 'sbg'], tmp_path)
-    assert any(path.endswith(STARSOLO_COUNTS) for path in inputs)
+    assert any(path.endswith(STARSOLO_FEATURES) for path in inputs)
 
 
 def test_sbg_object_alone_has_no_starsolo_input(tmp_path):
