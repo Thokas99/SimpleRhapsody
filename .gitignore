@@ -62,3 +62,4 @@ docs/._*
 
 # Site paths of the Slurm job scripts
 slurm/site.env
+site/
