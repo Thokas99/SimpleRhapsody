@@ -11,3 +11,5 @@ It standardizes the cell barcode and UMI of read 1, builds a whitelist of the ob
 - [Command line](cli.md)
 
 Source: [github.com/imallona/rhapsodist](https://github.com/imallona/rhapsodist)
+
+Preprint: [rhapsodist: a reproducible Snakemake workflow for BD Rhapsody single-cell RNA-seq data](https://www.biorxiv.org/content/10.64898/2026.04.28.721304v1)
