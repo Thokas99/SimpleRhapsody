@@ -74,10 +74,12 @@ cat(sprintf('UMIs per cell: median %g (simulated %g), largest relative differenc
             max(relative_difference, 0), length(shared),
             ifelse(umis_pass, 'PASS', 'FAIL')))
 
-plot(true_umis_per_cell, umis_per_cell,
-     xlab = 'simulated UMIs per cell', ylab = 'recovered UMIs per cell',
-     pch = 16, cex = 0.5, col = 'steelblue')
-abline(0, 1, col = 'red', lty = 2)
+if (length(shared) > 0) {
+    plot(true_umis_per_cell, umis_per_cell,
+         xlab = 'simulated UMIs per cell', ylab = 'recovered UMIs per cell',
+         pch = 16, cex = 0.5, col = 'steelblue')
+    abline(0, 1, col = 'red', lty = 2)
+}
 ```
 
 # Barcode recovery

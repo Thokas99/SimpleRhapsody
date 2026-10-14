@@ -40,7 +40,8 @@ rule simulate_genome_gtf_transcriptome_fastqs:
         r2            = op.join(_SIM_DIR, 'sim_R2.fq.gz'),
         st_assignments = op.join(_SIM_DIR, 'sampletag_assignments.txt'),
         st_fastqs     = _ST_FASTQS,
-        true_mex      = op.join(_SIM_DIR, 'true_mex', 'matrix.mtx.gz')
+        true_mex      = op.join(_SIM_DIR, 'true_mex', 'matrix.mtx.gz'),
+        true_barcodes = op.join(_SIM_DIR, 'true_mex', 'barcodes.tsv.gz')
     params:
         n_cells       = config.get('sim_n_cells',    100),
         n_genes       = config.get('sim_n_genes',    100),
@@ -100,6 +101,7 @@ if config.get('use_simulated', False):
                                f'{_sim_sample}_starsolo_sce.rds'),
             barcodes = op.join(_SIM_DIR, 'cell_barcodes.txt'),
             true_mex = op.join(_SIM_DIR, 'true_mex', 'matrix.mtx.gz'),
+            true_barcodes = op.join(_SIM_DIR, 'true_mex', 'barcodes.tsv.gz'),
             script   = op.join(workflow.basedir, 'src', 'validate_simulation.Rmd')
         output:
             html = op.join(config['working_dir'], 'simulation_validation.html')
