@@ -608,7 +608,7 @@ jobs:
 
       - name: dry-run the simulation in the image
         run: |
-          docker run --rm -v "$PWD":/work rhapsodist \
+          docker run --rm --user "$(id -u):$(id -g)" -e USER="$USER" -v "$PWD":/work rhapsodist \
             --configfile /opt/rhapsodist/configs/sim_config.yaml \
             --config "aligner=['starsolo','kallisto','alevin']" \
             --cores 2 --dry-run --nolock

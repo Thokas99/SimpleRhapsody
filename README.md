@@ -79,7 +79,7 @@ Or use the container image, which holds Snakemake and the pinned environments (n
 
 ```
 docker build -t rhapsodist .
-docker run --rm -v "$PWD":/work rhapsodist --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir=/work/output/simul --cores 10
+docker run --rm --user "$(id -u):$(id -g)" -e USER="$USER" -v "$PWD":/work rhapsodist --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir=/work/output/simul --cores 10
 
 apptainer build rhapsodist.sif rhapsodist.def
 apptainer run rhapsodist.sif --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir="$PWD/output/simul" --cores 10

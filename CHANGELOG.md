@@ -15,7 +15,7 @@
 - The simulator adds `sim_min_count` (default 1) and `sim_separate_sampletags`.
 - The simulation validation compares counts with the simulated matrix.
 - The `sbg` object gets the gene ids of STARsolo.
-- `Dockerfile` and `rhapsodist.def`: image with the pinned environments.
+- `Dockerfile` and `rhapsodist.def`: image with the pinned environments; Docker runs as the host user.
 - `pip install` works; `rhapsodist --config` reaches Snakemake.
 - No rule needs a system `pigz` or `gawk`.
 - The BD CWL rule pulls its image with apptainer 1.5.
