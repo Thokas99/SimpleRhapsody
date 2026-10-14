@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rules stop at the first failing command.
+- `fetch_sra` tests the compressed reads and fails on a truncated file.
 - CWL step times list top-level steps only, not nested ones.
 - The benchmarks report sums runtime over samples.
 - Scaled MARD heatmaps span 0 to 2.

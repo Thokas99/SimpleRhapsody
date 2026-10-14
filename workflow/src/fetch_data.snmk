@@ -45,6 +45,7 @@ if _sra_samples:
                 > {output.r1} 2>> {log}
             pigz -p {threads} -c {params.outdir}/{params.sra_run}_2.fastq \
                 > {output.r2} 2>> {log}
+            pigz -t {output.r1} {output.r2} 2>> {log}
             rm -rf {params.outdir}/{params.sra_run}/ \
                    {params.outdir}/{params.sra_run}_1.fastq \
                    {params.outdir}/{params.sra_run}_2.fastq
