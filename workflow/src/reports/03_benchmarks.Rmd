@@ -130,7 +130,9 @@ cwl_files <- list.files(bm_dir, pattern = "^sbg_cwl_steps_.*\\.tsv$", full.names
 cwl_steps <- rbindlist(lapply(cwl_files, function(fn) {
     steps <- fread(fn, sep = "\t")
     steps[, sample := sub("^sbg_cwl_steps_(.*)\\.tsv$", "\\1", basename(fn))]
-    steps[!is.na(seconds), .(sample, step, seconds)]
+    steps <- steps[!is.na(seconds)]
+    steps[, seconds := exclusive_seconds(start, end, seconds)]
+    steps[, .(sample, step, seconds)]
 }))
 
 by_stage <- as.data.table(stage_times(

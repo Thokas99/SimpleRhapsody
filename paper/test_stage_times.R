@@ -71,12 +71,4 @@ writeLines(c("key\tvalue", "cpu_model\tAMD EPYC 7763", "n_cpus\t128"),
 info <- read_run_info(run)
 check("run info is read as text", identical(info$value[info$key == "n_cpus"], "128"))
 
-overlap <- exclusive_seconds(
-    c("2026-10-01 10:00:00", "2026-10-01 10:05:00", "2026-10-01 10:20:00"),
-    c("2026-10-01 10:10:00", "2026-10-01 10:15:00", "2026-10-01 10:30:00"),
-    c(600, 600, 600))
-check("concurrent steps share their common time", isTRUE(all.equal(overlap, c(600, 300, 600))))
-check("step times without timestamps are kept",
-      identical(exclusive_seconds(c("a", "b"), c("c", "d"), c(5, 7)), c(5, 7)))
-
 cat("all stage time tests passed\n")

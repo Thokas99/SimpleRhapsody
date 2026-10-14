@@ -85,4 +85,16 @@ check("the rest of the CWL rule time is overhead",
 check("other aligners are unchanged by the CWL steps",
       value(split_times, "starsolo", "alignment and quantification") == 60)
 
+overlap <- exclusive_seconds(
+    c("2026-10-01 10:00:00", "2026-10-01 10:05:00", "2026-10-01 10:20:00"),
+    c("2026-10-01 10:10:00", "2026-10-01 10:15:00", "2026-10-01 10:30:00"),
+    c(600, 600, 600))
+check("concurrent steps share their common time", isTRUE(all.equal(overlap, c(600, 300, 600))))
+check("step times without timestamps are kept",
+      identical(exclusive_seconds(c("a", "b"), c("c", "d"), c(5, 7)), c(5, 7)))
+
+midnight <- as.POSIXct(c("2026-10-01 00:00:00", "2026-10-01 00:05:00"), tz = "UTC")
+check("timestamps read as times, midnight included",
+      isTRUE(all.equal(exclusive_seconds(midnight, midnight + 600, c(600, 600)), c(600, 300))))
+
 cat("\nAll benchmark_stages tests passed.\n")

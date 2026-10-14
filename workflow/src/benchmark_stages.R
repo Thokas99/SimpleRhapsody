@@ -92,3 +92,23 @@ stage_times <- function(classified, seconds, aligners_run,
     }
     aggregate(seconds ~ pipeline + stage, data = per_aligner, FUN = sum)
 }
+
+## Seconds of each step not covered by steps that started earlier, so that
+## concurrent steps add up to the wall-clock time they span. The recorded
+## seconds are kept when start and end are not timestamps.
+exclusive_seconds <- function(start, end, seconds) {
+    as_seconds <- function(time) {
+        if (inherits(time, "POSIXct")) return(as.numeric(time))
+        as.numeric(as.POSIXct(time, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
+    }
+    start_time <- as_seconds(start)
+    end_time <- as_seconds(end)
+    if (anyNA(start_time) || anyNA(end_time)) return(seconds)
+    exclusive <- numeric(length(seconds))
+    covered_until <- -Inf
+    for (i in order(start_time)) {
+        exclusive[i] <- max(0, end_time[i] - max(start_time[i], covered_until))
+        covered_until <- max(covered_until, end_time[i])
+    }
+    exclusive
+}
