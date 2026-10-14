@@ -38,7 +38,7 @@ def records_by_step(text=LOG):
 
 def test_steps_are_listed_in_order_of_first_start():
     steps = [r['step'] for r in parse_step_times(LOG.splitlines())]
-    assert steps == ['QualCLAlign', 'Sub', 'Inner', 'Report']
+    assert steps == ['QualCLAlign', 'Sub', 'Report']
 
 
 def test_scattered_step_runs_from_first_start_to_completion():
@@ -48,10 +48,10 @@ def test_scattered_step_runs_from_first_start_to_completion():
     assert record['seconds'] == 3
 
 
-def test_nested_workflow_step_and_its_inner_step():
+def test_nested_workflow_is_timed_without_its_inner_steps():
     records = records_by_step()
     assert records['Sub']['seconds'] == 1
-    assert records['Inner']['seconds'] == 1
+    assert 'Inner' not in records
 
 
 def test_status_is_kept():
@@ -89,7 +89,7 @@ def test_write_step_times(tmp_path):
     lines = path.read_text().splitlines()
     assert lines[0] == 'step\tstart\tend\tseconds\tstatus'
     assert lines[1] == 'QualCLAlign\t2026-10-01 17:26:25\t2026-10-01 17:26:28\t3\tsuccess'
-    assert len(lines) == 5
+    assert len(lines) == 4
 
 
 def test_main_reads_log_and_writes_table(tmp_path, monkeypatch):

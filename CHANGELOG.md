@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+- Rules stop at the first failing command.
 - `fetch_sra` tests the compressed reads and fails on a truncated file.
+- CWL step times list top-level steps only, not nested ones.
+- The benchmarks report sums runtime over samples.
+- Scaled MARD heatmaps span 0 to 2.
+- `derive_observed_whitelist` uses one thread.
+- Paper rules find marker tables under `workflow/`.
 - Figure tables leave report rules out of time and memory.
 - `09_archive.sh` copies the HDF5 folders of the count objects and tag splits.
 - `generate_sce_sbg` waits for STARsolo, so the `sbg` object gets gene ids.

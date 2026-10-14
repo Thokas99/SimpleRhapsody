@@ -31,6 +31,8 @@ ENV = op.join(PAPER_DIR, "env.yaml")
 aligners_arg = ",".join(ALIGNERS)
 has_sbg_arg = "true" if HAS_SBG else "false"
 MARKERS_FILE = config.get("biology_markers_file", "")
+if MARKERS_FILE and not op.isabs(MARKERS_FILE) and not op.exists(MARKERS_FILE):
+    MARKERS_FILE = op.join(PAPER_DIR, "..", "workflow", MARKERS_FILE)
 BENCH_PREFIX = config.get("bench_prefix", "fig_sim")
 USE_CASE = config.get("use_case", "sendoel")
 _USE_CASE_FIG_STEMS = {"hela": "fig2_hela", "sendoel": "fig3_sendoel",
