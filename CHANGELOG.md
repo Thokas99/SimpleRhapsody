@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.4.0 - 2026-10-16
+
+### Tool: feature requests
+
+- Samples accept a separate sample tag library: `sampletag_cb_umi_fq`, `sampletag_cdna_fq` or `sampletag_sra_run`.
+- `soloCBmatchWLtype` config field, default `1MM_multi` as before.
+- `use_case: trajectory` in the biology report adds pseudotime agreement between aligners.
+- Comparison and biology reports add Spearman rho and MARD on counts per million.
+- The comparison report lists barcode correction counts per aligner.
+- The benchmarks report gives time per stage and aligner, BD CWL step times, threads and the machine record from `run_info.tsv`.
+- The simulator adds `sim_min_count` (default 1) and `sim_separate_sampletags`.
+- `Dockerfile` and `rhapsodist.def`: image with the pinned environments; Docker runs as the host user.
+- `biology_markers_file` may be relative to `workflow/`.
+- README sections on aligner choice and cell filter choice.
+- Requires Snakemake 8.12 or later.
+
+### Tool: fixes
+
+- Rules stop at the first failing command.
+- `fetch_sra` fails on a truncated compressed read file.
+- The simulation validation compares counts per gene and cell with the simulated matrix.
+- The benchmarks report renders with one aligner.
+- The `sbg` object gets the gene ids of STARsolo; a symbol shared by several gene ids keeps its name.
+- Reports render in a temporary folder, so read-only images work.
+- `pip install` works; `rhapsodist --config` reaches Snakemake.
+- No rule needs a system `pigz` or `gawk`.
+- The BD CWL rule pulls its image with apptainer 1.5.
+- `derive_observed_whitelist` uses one thread.
+- `get_txp2gene` fails on an empty table.
+
+### Draft
+
+- Configs for GSE282765, GSE301173, the epidermis at 40% of the reads, both datasets at 1 and 2 linker mismatches, and sparse simulation.
+- `paper/`: comparison with UniverSC, zUMIs and OpenPipelines, linker tolerance and sample tag calls.
+- Figure tables add time per stage, scaled MARD and Spearman; report rules are left out of time and memory; concurrent CWL steps count once.
+- `slurm/`: one job script per run, on one CPU model, and an archive step.
+
 ## v0.3.0 - 2026-06-29
 
 ### Requests

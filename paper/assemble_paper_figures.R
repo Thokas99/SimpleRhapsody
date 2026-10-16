@@ -39,6 +39,9 @@ script_dir = tryCatch({
     if (length(f) == 0) getwd() else dirname(normalizePath(f))
 }, error = function(e) getwd())
 source(file.path(script_dir, "export_helpers.R"))
+source(file.path(script_dir, "detection_recall.R"))
+source(file.path(script_dir, "stage_times.R"))
+source(file.path(script_dir, "..", "workflow", "src", "agreement_metrics.R"))
 
 parse_args = function() {
     p = ArgumentParser()
@@ -53,7 +56,7 @@ parse_args = function() {
     p$add_argument("--markers_file", default = "")
     p$add_argument("--bench_prefix", default = "fig_sim")
     p$add_argument("--use_case",
-                   choices = c("sendoel", "hela"),
+                   choices = c("sendoel", "hela", "trajectory"),
                    default = "sendoel")
     p$parse_args()
 }
@@ -218,36 +221,50 @@ run_simulation = function(opt) {
     pb_list = lapply(sces, function(sce) rowSums(counts(sce)))
 
     truth_pb = NULL
+    truth_mat = NULL
     if (dir.exists(truth_mex)) {
         mat_fn = list.files(truth_mex, pattern = "matrix\\.mtx(\\.gz)?$", full.names = TRUE)[1]
         feat_fn = list.files(truth_mex, pattern = "features\\.tsv(\\.gz)?$", full.names = TRUE)[1]
+        bc_fn = list.files(truth_mex, pattern = "barcodes\\.tsv(\\.gz)?$", full.names = TRUE)[1]
         if (!is.na(mat_fn) && !is.na(feat_fn)) {
             m = readMM(mat_fn)
             feat = read.table(feat_fn, sep = "\t", stringsAsFactors = FALSE)
             rownames(m) = feat$V1
             truth_pb = rowSums(m)
             pb_list$truth = truth_pb
+            if (!is.na(bc_fn)) {
+                colnames(m) = readLines(bc_fn)
+                truth_mat = m
+            }
         }
+    }
+
+    ## Detected fraction of gene-by-cell entries per true count.
+    if (!is.null(truth_mat)) {
+        detection = rbindlist(lapply(names(sces), function(pipe) {
+            cbind(pipeline = pipe,
+                  detection_by_true_count(truth_mat, counts(sces[[pipe]])))
+        }))
+        pp_save_csv(detection, pdir, "sim_detection_by_true_count")
+        p_detection = ggplot(detection[n_entries > 0],
+                             aes(true_count, detected_fraction,
+                                 colour = pipeline, group = pipeline)) +
+            geom_line() +
+            geom_point() +
+            scale_y_continuous(limits = c(0, 1)) +
+            theme_bw() +
+            labs(x = "true count per gene and cell", y = "fraction detected",
+                 colour = "pipeline")
+        pp_save_pdf(p_detection, pdir, "sim_detection_by_true_count",
+                    width = 5, height = 3)
     }
 
     shared = Reduce(intersect, lapply(pb_list, names))
     if (length(shared) > 0 && length(pb_list) >= 2) {
         pb_mat = do.call(cbind, lapply(pb_list, function(v) v[shared]))
-        mard_stat = function(x, y) {
-            d = (x + y) / 2
-            mean(abs(x - y)[d > 0] / d[d > 0], na.rm = TRUE)
-        }
-        pairs = expand.grid(a = colnames(pb_mat), b = colnames(pb_mat),
-                            stringsAsFactors = FALSE)
-        mard_dt = rbindlist(lapply(seq_len(nrow(pairs)), function(i) {
-            a = pairs$a[i]; b = pairs$b[i]
-            x = pb_mat[, a]; y = pb_mat[, b]
-            m = mard_stat(x, y)
-            ci = if (a == b) c(NA, NA) else pp_bootstrap_pair(x, y, mard_stat, n_boot = 1000)
-            data.table(pipeline1 = a, pipeline2 = b, mard = m,
-                       ci_lo = ci[1], ci_hi = ci[2])
-        }))
+        mard_dt = pp_pairwise_table(pb_mat, mard, "mard")
         pp_save_csv(mard_dt, pdir, "sim_pseudobulk_mard")
+        pp_save_rank_agreement(pb_mat, pdir, "sim_pseudobulk")
 
         p_mard = ggplot(mard_dt, aes(pipeline1, pipeline2, fill = mard)) +
             geom_tile(colour = "white") +
@@ -408,7 +425,7 @@ run_simulation = function(opt) {
                                title = "Cell-barcode overlap (simulated)")
     }
     if (exists("p_mard", inherits = FALSE)) {
-        panels$D = p_mard + panel_theme +
+        panels$D = p_mard + labs(title = "Pseudobulk MARD") + panel_theme +
             theme(axis.text.x = element_text(angle = 30, hjust = 1),
                   aspect.ratio = 1)
     }
@@ -419,7 +436,7 @@ run_simulation = function(opt) {
                   aspect.ratio = 1)
     }
     if (exists("p_pcor", inherits = FALSE)) {
-        panels$G = p_pcor + panel_theme +
+        panels$G = p_pcor + labs(title = "Pseudobulk Pearson r") + panel_theme +
             theme(axis.text.x = element_text(angle = 30, hjust = 1),
                   aspect.ratio = 1)
     }
@@ -551,9 +568,10 @@ run_biology = function(opt) {
     aligners = intersect(canonical_pipeline_order, aligners)
     pdir = setup_paper_dir(wd, samp)
     use_case = if (is.null(opt$use_case)) "sendoel" else opt$use_case
-    stopifnot(use_case %in% c("sendoel", "hela"))
+    stopifnot(use_case %in% c("sendoel", "hela", "trajectory"))
     is_hela = identical(use_case, "hela")
-    fig_stem = switch(use_case, hela = "fig2_hela", sendoel = "fig3_sendoel")
+    fig_stem = switch(use_case, hela = "fig2_hela", sendoel = "fig3_sendoel",
+                      trajectory = "fig5_trajectory")
 
     biords = function(tag) file.path(wd, paste0(samp, "_biology_", tag, ".rds"))
 
@@ -579,25 +597,20 @@ run_biology = function(opt) {
         pp_save_pdf(p_qc, pdir, "bio_qc_bars", width = 6, height = 3)
     }
 
+    ## Pairwise Spearman correlation of pseudotime (use_case trajectory).
+    if (file.exists(biords("pseudotime"))) {
+        pseudotime_cor = as.data.table(as.table(readRDS(biords("pseudotime"))$spearman))
+        setnames(pseudotime_cor, c("pipeline1", "pipeline2", "spearman"))
+        pp_save_csv(pseudotime_cor, pdir, "bio_pseudotime_spearman")
+    }
+
     ## Pseudobulk MARD with bootstrap CIs.
     if (file.exists(biords("pseudobulk_mard"))) {
         pbobj = readRDS(biords("pseudobulk_mard"))
         pb_mat = pbobj$pb
-        mard_stat = function(x, y) {
-            d = (x + y) / 2
-            mean(abs(x - y)[d > 0] / d[d > 0], na.rm = TRUE)
-        }
-        pipes = colnames(pb_mat)
-        pairs = expand.grid(a = pipes, b = pipes, stringsAsFactors = FALSE)
-        mard_dt = rbindlist(lapply(seq_len(nrow(pairs)), function(i) {
-            a = pairs$a[i]; b = pairs$b[i]
-            m = mard_stat(pb_mat[, a], pb_mat[, b])
-            ci = if (a == b) c(NA, NA) else pp_bootstrap_pair(
-                pb_mat[, a], pb_mat[, b], mard_stat, n_boot = 1000)
-            data.table(pipeline1 = a, pipeline2 = b, mard = m,
-                       ci_lo = ci[1], ci_hi = ci[2])
-        }))
+        mard_dt = pp_pairwise_table(pb_mat, mard, "mard")
         pp_save_csv(mard_dt, pdir, "bio_pseudobulk_mard")
+        pp_save_rank_agreement(pb_mat, pdir, "bio_pseudobulk")
         mard_dt[, pipeline1 := order_pipelines(pipeline1, aligners)]
         mard_dt[, pipeline2 := order_pipelines(pipeline2, aligners)]
         p = ggplot(mard_dt, aes(pipeline1, pipeline2, fill = mard * 100)) +
@@ -1392,11 +1405,10 @@ run_biology = function(opt) {
     if (exists("bc_lists", inherits = FALSE)) {
         ## Smaller internal render dims → UpSetR text uses a larger fraction
         ## of the canvas, so fonts look bigger after patchwork scales the
-        ## raster up to fill the grid cell. Title names the sample so
-        ## the reader sees at a glance whether this is fig 2 (HeLa) or
-        ## fig 3 (mouse skin).
-        upset_title = if (is_hela) "Cell-barcode overlap (HeLa)"
-                      else         "Cell-barcode overlap (mouse skin)"
+        ## raster up to fill the grid cell. The title names the dataset.
+        dataset_label = switch(use_case, hela = "HeLa", sendoel = "mouse skin",
+                               trajectory = opt$sample)
+        upset_title = sprintf("Cell-barcode overlap (%s)", dataset_label)
         panels2$A = upset_panel(bc_lists, width_in = 5, height_in = 3.5,
                                 title = upset_title)
     }
@@ -1581,12 +1593,12 @@ run_benchmarks = function(opt) {
     ## cutadapt step under each non-sbg aligner so totals include the same
     ## pre-alignment work that sbg already performs in its container.
     nonsbg_aligners = setdiff(aligners, "sbg")
-    cutadapt_rows = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file)]
+    cutadapt_rows = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file)]
     cutadapt_minutes = if (nrow(cutadapt_rows) > 0) sum(cutadapt_rows$minutes) else 0
     cutadapt_max_rss = if (nrow(cutadapt_rows) > 0)
         max(cutadapt_rows$max_rss_gb, na.rm = TRUE) else NA_real_
 
-    aligner_time = bm[pipeline %in% aligners & !is_install_rule(file),
+    aligner_time = bm[pipeline %in% aligners & is_tool_rule(file),
                       .(minutes = sum(minutes)), by = pipeline]
     time_segments = rbindlist(list(
         aligner_time[, .(pipeline, segment = "aligner", minutes)],
@@ -1599,7 +1611,7 @@ run_benchmarks = function(opt) {
     time_segments[, pipeline := order_pipelines(pipeline)]
     pipe_time = time_segments[, .(total_min = sum(minutes)), by = pipeline]
 
-    pipe_mem = bm[pipeline %in% aligners & !is_install_rule(file),
+    pipe_mem = bm[pipeline %in% aligners & is_tool_rule(file),
                   .(peak_rss_gb = max(max_rss_gb, na.rm = TRUE)), by = pipeline]
     if (!is.na(cutadapt_max_rss) && length(nonsbg_aligners) > 0) {
         pipe_mem[pipeline %in% nonsbg_aligners,
@@ -1647,6 +1659,21 @@ run_benchmarks = function(opt) {
     pp_save_pdf(p_t + p_m, pdir, paste0(opt$bench_prefix, "_bench_total"),
                 width = 6, height = 3.3)
 
+    by_stage = stage_time_table(bench_dir, aligners)
+    pp_save_csv(by_stage, pdir, "bench_stage")
+    p_stage = ggplot(by_stage, aes(pipeline, minutes, fill = stage)) +
+        geom_col(width = 0.7) +
+        scale_fill_brewer(palette = "Set2", name = NULL) +
+        theme_bw() +
+        theme(legend.position = "right") +
+        labs(x = NULL, y = "wall-clock time (min)")
+    pp_save_pdf(p_stage, pdir, paste0(opt$bench_prefix, "_bench_stage"),
+                width = 6, height = 3.3)
+
+    run_info = read_run_info(wd)
+    if (is.null(run_info)) run_info = data.frame(key = character(0), value = character(0))
+    pp_save_csv(run_info, pdir, "run_info")
+
     bm_steps = bm[pipeline %in% aligners]
     if (nrow(bm_steps) > 0) {
         p_step = ggplot(bm_steps, aes(reorder(step, minutes), minutes,
@@ -1685,19 +1712,14 @@ load_benchmarks = function(bench_dir, aligners) {
     bm[]
 }
 
-## One-off source-compilation rules matched by benchmark file name. Excluded
-## from per-pipeline totals so figures reflect per-run cost rather than the
-## first-invocation install cost.
-is_install_rule = function(file) grepl("_install\\.txt$", file)
-
 ## Add the shared cutadapt CB/UMI standardization step to non-sbg aligner totals
 ## so figures compare like-for-like against sbg, whose CWL ingests raw fastqs and
 ## demultiplexes internally.
 load_pipeline_time = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    out = bm[pipeline %in% aligners & !is_install_rule(file),
+    out = bm[pipeline %in% aligners & is_tool_rule(file),
              .(total_min = sum(minutes)), by = pipeline]
-    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           sum(minutes)]
     nonsbg = setdiff(aligners, "sbg")
     if (length(nonsbg) > 0 && length(cutadapt_minutes) > 0 && cutadapt_minutes > 0) {
@@ -1708,9 +1730,9 @@ load_pipeline_time = function(bench_dir, aligners) {
 
 load_pipeline_memory = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    out = bm[pipeline %in% aligners & !is_install_rule(file),
+    out = bm[pipeline %in% aligners & is_tool_rule(file),
              .(peak_rss_gb = max(max_rss_gb, na.rm = TRUE)), by = pipeline]
-    cutadapt_max_rss = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_max_rss = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           max(max_rss_gb, na.rm = TRUE)]
     nonsbg = setdiff(aligners, "sbg")
     if (length(nonsbg) > 0 && is.finite(cutadapt_max_rss)) {
@@ -1724,9 +1746,9 @@ load_pipeline_memory = function(bench_dir, aligners) {
 ## the cutadapt fraction can be drawn as a stacked segment on the time bar.
 load_pipeline_time_segments = function(bench_dir, aligners) {
     bm = load_benchmarks(bench_dir, aligners)
-    aligner_time = bm[pipeline %in% aligners & !is_install_rule(file),
+    aligner_time = bm[pipeline %in% aligners & is_tool_rule(file),
                       .(minutes = sum(minutes)), by = pipeline]
-    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & !is_install_rule(file),
+    cutadapt_minutes = bm[grepl("^standardize_cb_umis_", file) & is_tool_rule(file),
                           sum(minutes)]
     nonsbg = setdiff(aligners, "sbg")
     out = aligner_time[, .(pipeline, segment = "aligner", minutes)]
