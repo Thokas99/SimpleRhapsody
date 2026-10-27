@@ -1,0 +1,17 @@
+{
+  "upstream_url": "https://github.com/imallona/rhapsodist",
+  "upstream_commit": "7991f870fdfe38e12648673d330cbfd4839e755d",
+  "conversion_source": "/run/user/1000/gvfs/sftp:host=dragon3/globalscratch/tsirchi/cemlab/rhapsodist/software/bd-barcodes/rhapsody_cell_label.py",
+  "sha256": {
+    "workflow/src/prepare_fastq.snmk": "6c13e8c5480fe7d5abff8ad2d0a3073812de131a640ab7c0dd23576cdf6ec99c",
+    "workflow/src/workflow_functions.py": "efd62a23f6b15729d9c600699562df321c77a5b26ed62a274af1ee1f6b4fe0ac",
+    "workflow/data/whitelist_384x3/BD_CLS1.txt": "466de1e9b22274474f11fe46b77278e058b8a846bf8e824eb713e92edcc6fefd",
+    "workflow/data/whitelist_384x3/BD_CLS2.txt": "7be8dee2607020a2489c11b3bfeaf5f46cbdb5a80d5b384827da50edefdb6f40",
+    "workflow/data/whitelist_384x3/BD_CLS3.txt": "7effc6c4ddfe9ca255d74fec2f5a8b6a98e853e2b20038978f0887c86d40b722",
+    "workflow/data/bd_conversion/rhapsody_cell_label.py": "0c680a69b6fa1548706cbb102dd2a276059ace63c46c069660364be52d540764",
+    "workflow/scripts/bd_barcode_conversion.py": "6baee56fdcfc18879067be7cdd1a4e437775bef9a040d6d19fc28cff0f0d4a7a"
+  },
+  "conversion_toolkit_source": "/home/thom/containers/rhapsodist/bd_rhapsody_barcode_conversion/barcode_mapping.py",
+  "conversion_toolkit_source_sha256": "03aa9e7d90c41032697fd8196dbf305e3c718db84b1c03a1c1187218a7b1215d",
+  "official_source_hpc_path": "/globalscratch/tsirchi/cemlab/rhapsodist/software/bd-barcodes/rhapsody_cell_label.py"
+}

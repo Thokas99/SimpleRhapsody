@@ -1,481 +1,162 @@
-# rhapsodist
+# Rhapsodist + SimpleAF
 
-Rhapsodist is a Snakemake workflow for processing BD Rhapsody WTA single-cell RNA-seq data. It supports v1, Enhanced, and Enhanced V2 beads.
+Prepare BD Rhapsody Enhanced V2/V3 WTA reads and quantify spliced, unspliced and ambiguous gene counts for downstream RNA-velocity analysis. The workflow preserves Rhapsodist's barcode/linker preparation and uses a prebuilt spliceu reference for SimpleAF quantification. It produces native USA counts and one H5AD with BD Rhapsody 4.0-compatible cell identifiers.
 
-The pipeline takes raw FASTQ files (local or fetched from SRA), standardises barcodes with cutadapt, and builds a per-sample whitelist of observed cell barcodes from the BD bead barcode panels. That whitelist is passed to each aligner for barcode correction. Aligners run in parallel: STARsolo, kallisto/bustools, salmon/alevin, and optionally the official BD Rhapsody CWL pipeline. Each aligner produces an HDF5-backed SingleCellExperiment object, and optionally an h5ad/anndata file for Python users. The pipeline also handles sample tag demultiplexing and generates four types of reports: per-aligner descriptive, cross-pipeline comparison, benchmarks, and biology.
+The workflow ends at validated count matrices. Velocity estimation, cell annotation, lineage inference and merging with the original BD expression matrix are outside its scope.
 
-For alevin, DropletUtils barcodeRanks is applied to the DeduplicatedReads column of featureDump.txt to select cell barcodes before loading counts into R, keeping memory use low. This uses the same algorithm as the kallisto step, making cell calling consistent across aligners.
+## Workflow and scientific contract
 
-By default alevin uses graph-based EM deduplication. This distributes multi-mapping reads as fractional counts and raises per-cell UMI totals compared to unique-only aligners such as STARsolo with soloMultiMappers: Unique. Set `alevin_sketch: true` to use `--sketch` instead: sketch deduplication gives integer-like counts on the same scale as STARsolo Unique, making cross-aligner UMI comparison fair.
-
-# Preprint
-
-- [rhapsodist: a reproducible Snakemake workflow for BD~Rhapsody single-cell RNA-seq data](https://www.biorxiv.org/content/10.64898/2026.04.28.721304v1)
-  
-## Workflow diagram
-
-```mermaid
-flowchart TD
-    sra[SRA / local FASTQ R1 + R2] --> validate[validate bead version]
-    validate --> cutadapt[cutadapt barcode standardisation]
-
-    ref_url[genome/GTF/transcriptome URLs] --> download[download and index references]
-    download --> star_idx[STAR index]
-    download --> salmon_idx[salmon index]
-    download --> kallisto_idx[kallisto index]
-
-    cutadapt --> wl[derive observed whitelist from CB panels]
-    cutadapt --> starsolo[STARsolo alignment + UMI count]
-    cutadapt --> kallisto[kallisto bus alignment]
-    cutadapt --> alevin[salmon alevin alignment + UMI count]
-    sra --> sbg[BD Rhapsody CWL via cwl-runner]
-
-    star_idx --> starsolo
-    salmon_idx --> alevin
-    kallisto_idx --> kallisto
-
-    star_idx --> sbg_ref[SBG reference archive]
-    gtf[GTF] --> sbg_ref
-    sbg_ref -. or sbg_reference_url / sbg_reference_archive .- sbg_ref
-    sbg_ref --> sbg
-
-    wl --> starsolo
-    wl --> bustools[bustools correct + sort + count]
-    wl --> alevin
-
-    starsolo --> sce_star[HDF5-backed SCE starsolo]
-    kallisto --> bustools
-    bustools --> sce_kallisto[HDF5-backed SCE kallisto]
-    alevin --> knee[barcodeRanks filter on featureDump.txt]
-    alevin -. alevin_sketch: true .-> fry[alevin-fry quant cr-like]
-    fry --> knee
-    knee --> sce_alevin[HDF5-backed SCE alevin]
-    sbg --> sce_sbg[HDF5-backed SCE sbg]
-
-    sce_star & sce_kallisto & sce_alevin --> desc[per-aligner descriptive reports]
-    sce_star & sce_kallisto & sce_alevin & sce_sbg --> comparison[comparison report]
-    sce_star & sce_kallisto & sce_alevin & sce_sbg --> biology[biology report]
-    comparison --> benchmarks[benchmarks report]
-
-    starsolo --> sampletags[sampletag demultiplexing]
-    sampletags --> st_report[sampletag report]
+```text
+Prebuilt reference → reference preflight before FASTQ processing
+Paired FASTQs → optional sample-wide concatenation/downsampling → linker/chemistry gate
+             → streamed preparation units → ordered prepared gzip assembly
+             → observed whitelist + QC receipt → SimpleAF USA → H5AD → native-count validation
 ```
 
-## Quickstart
+Preparation retains a 27-nucleotide cell barcode and an 8-nucleotide UMI. The observed whitelist contains only barcodes actually found in prepared R1 whose three segments occur in the ordered BD 384-entry panels. Ambiguous UMIs are retained; no additional barcode correction or expression filtering is introduced during export.
 
-Install the CLI (optional), in editable mode so it finds the workflow files of the clone:
+Quantification uses `1{b[27]u[8]}2{r:}`, both orientations, `cr-like` UMI resolution, and the observed whitelist through `--unfiltered-pl --min-reads 1`. Here **USA** means spliced (S), unspliced (U) and ambiguous (A) count blocks; the config's `resolution: usa` specifies this output contract, not the SimpleAF UMI-resolution flag.
 
-```
-pip install -e .
-```
+| H5AD field | Contents |
+|---|---|
+| `X` and `layers['spliced']` | S + A |
+| `layers['unspliced']` | U |
+| `obs_names` | Decimal BD cell indices by default |
+| `obs` | Original `barcode_27nt`, integer `bd_cell_index`, and `sample` |
+| `var` | Original Ensembl gene identifiers/order and reference gene symbols when supplied |
+| `uns['pipeline']` | Quantification/conversion provenance, workflow/config/lock hashes and preparation-receipt hash |
 
-Run the simulation test:
+Native USA files retain separate S/U/A counts. Export preserves quantified cells, genes, zero-count rows/columns and fractional estimates without rounding. BD identifiers are sample-local: use both `sample` and the cell identifier when joining captures. An optional explicit `bd_reference` identifier list/TSV can supply full cell names; it does not import BD expression counts. See the [conversion implementation](workflow/scripts/bd_barcode_conversion.py) for its accepted formats.
 
-```
-rhapsodist --configfile configs/sim_config.yaml --cores 10
-```
+## Build a new container
 
-Or use the container image, which holds Snakemake and the pinned environments (not the BD pipeline). Run it from a directory with your config; outputs are written there:
+The runtime targets Linux x86-64 and requires Apptainer with fakeroot for this build recipe. From the source checkout, with Pixi available:
 
-```
-docker build -t rhapsodist .
-docker run --rm --user "$(id -u):$(id -g)" -e USER="$USER" -v "$PWD":/work rhapsodist --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir=/work/output/simul --cores 10
-
-apptainer build rhapsodist.sif rhapsodist.def
-apptainer run rhapsodist.sif --configfile /opt/rhapsodist/configs/sim_config.yaml --config "aligner=['starsolo','kallisto','alevin']" working_dir="$PWD/output/simul" --cores 10
-```
-
-Run on real data (update the YAML first to point to your R1/R2 files or SRA accessions):
-
-```
-rhapsodist --configfile configs/config.yaml --cores 10
+```bash
+./container_build.sh "$PWD/rhapsodist-simpleaf.performance.sif"
 ```
 
-Extra snakemake arguments can be appended directly:
+The [build script](container_build.sh) installs the locked environment, runs development checks, builds and tests the image, then writes its checksum. It refuses to overwrite the destination image. The existing SIF predates the FASTQ-QC changes; a source update does not update that image. Keep the installed cluster image intact while validating a newly named artifact.
 
-```
-rhapsodist --configfile configs/config.yaml --cores 10 --rerun-incomplete --nolock
-```
+The container includes Snakemake, Cutadapt, pigz, seqtk, SimpleAF, piscem, alevin-fry and the Python export dependencies. Exact packages/artifact hashes are recorded in [pixi.lock](pixi.lock); primary pins are in [pixi.toml](pixi.toml). The [definition](rhapsodist.def) pins the Debian base image and Pixi installer. These pins support reproducible environments; build timestamps and bootstrap packages can still prevent byte-identical SIFs.
 
-Or call snakemake directly:
+## Configure a sample
 
-```
-snakemake --use-conda --benchmark-extended --cores 10 --configfile configs/config.yaml
-```
-
-## Example configs
-
-The repository includes several config files under `configs/`:
-
-- `config.yaml`: base template with all available options and comments. Copy this as a starting point for new datasets.
-- `sim_config.yaml`: simulated BD Rhapsody data used for CI and testing.
-- `sim_sparse_config.yaml`: the same with `sim_min_count: 0` and fewer UMIs per cell, so the true matrix has zeros.
-- `sendoel2024_config.yaml`: P60 mouse epidermis from a pooled CRISPR screen (Sendoel et al. 2024, GEO GSE235325). Multiple cell types, v1 beads, mouse GRCm39 vM36. Fetches FASTQs from SRA; includes per-cell guide assignments from the authors.
-- `sendoel2024_linker{1,2}_config.yaml`, `moro_mallona2025_linker{1,2}_config.yaml`: the two datasets at `cb_umi_max_errors` 1 and 2, without the BD pipeline. They read the fastqs fetched by the base config, which runs first.
-- `sendoel2024_downsampled_config.yaml`: the epidermis sample at 40% of the reads, with the four aligners. It reads the fastqs fetched by the base config.
-- `gse282765_config.yaml`: mouse colon CD45+ cells on enhanced beads with two sample tags, sequenced as a separate library (GEO GSE282765). Fetches both libraries from SRA.
-- `gse301173_config.yaml`: mouse neutrophils from bone marrow, blood and lung with eleven sample tags in a separate library (GEO GSE301173). Runs the biology report with `use_case: trajectory`.
-
-The `sim_*` configs are small synthetic scenarios that exercise specific features in CI:
-
-- `sim_config_search.yaml`: alevin only, so sampletags are called by the alignment-free search instead of starsolo.
-- `sim_kallisto.yaml`: kallisto only, sampletags off. Isolates the kallisto mode (self-compiled kallisto, bioconda bustools); run by the manual `integration-kallisto` CI job.
-- `sim_separate_sampletags.yaml`: tag reads simulated as their own fastq pair (`sim_separate_sampletags: true`), as for a separately sequenced sample tag library.
-- `sim_search_sampletags.yaml` and `sim_starsolo_sampletags.yaml`: declare a per-sample `sampletags` set, so they test restricting the matched tags and splitting each aligner's counts into one file per tag. The first uses the mapping form (search mode); the second uses the list form across two aligners (starsolo mode).
-
-Both sampletag scenarios run end to end in the `integration-sampletags` CI job, which checks that the expected per-tag split files exist. The job is opt-in because it builds conda envs: add the `integration` label to a pull request to start it, or run it from the Actions tab once the workflow is on the default branch.
-
-## Repository layout
-
-```
-configs/                 config yaml files (see above)
-workflow/
-  Snakefile              main snakemake workflow
-  data/
-    barcodes/            BD bead barcode whitelists (v1, enhanced, enhanced_v2)
-    markers/             marker gene TSV files for biology reports
-    sampletags/          sample tag sequences
-  envs/                  conda environment yaml files
-  src/
-    *.R                  per-aligner SCE generation and report scripts
-    *.py                 python helpers, simulation, barcode matching
-    *.Rmd                rmarkdown reports rendered by the pipeline
-    ggtheme.R            shared ggplot2 theme used in all reports
-    simulate.snmk        snakemake rules for synthetic data generation
-    fetch_data.snmk      snakemake rules for downloading references and SRA data
-    reports/             biology and benchmark report templates
-paper/                   optional manuscript materials, independent of workflow/ (see paper/README.md)
-rhapsodist/              installable CLI package
-tests/                   pytest unit tests
-```
-
-## Configuration
-
-Copy `configs/config.yaml` and fill in the fields for your dataset. The main options are described below.
-
-### Resources
+Create `configs/my_sample.yaml` using absolute paths accessible inside the container. This example describes paths to replace with your own inputs:
 
 ```yaml
-nthreads: 10
-max_mem_mb: 60000
-working_dir: output/my_experiment
-```
+working_dir: /globalscratch/tsirchi/cemlab/simpleaf/results_performance
+nthreads: 16
+bead_chemistry: enhanced_v2  # enhanced_v3 uses the same GTGA/GACA preparation
+cb_umi_max_errors: 0
+downsample: 100             # percentage; 100 retains all input pairs
 
-### References
+export:
+  python: python3
+simpleaf:
+  index: /globalscratch/tsirchi/cemlab/simpleaf/references/GRCh38_gencode_v49_spliceu/output/index
+  resolution: usa
 
-References can be given as local paths or as URLs. When URLs are provided, the pipeline downloads and decompresses them automatically into `reference_dir`.
-
-Local paths:
-
-```yaml
-gtf_origin: "gencode"        # gencode or ensembl; only sets the transcriptome fasta header convention
-gtf: /path/to/annotation.gtf # any GTF with standard transcript_id and gene_id attributes works, regardless of column order
-genome: /path/to/genome.fa
-transcriptome: /path/to/transcriptome.fa.gz   # gzipped or plain fasta both work
-sjdbOverhang: 70              # read length minus 1
-```
-
-URL-based (preferred for reproducibility):
-
-```yaml
-gtf_origin: "gencode"
-reference_dir: data/reference/GRCh38_v46
-genome_url: "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/GRCh38.p14.genome.fa.gz"
-gtf_url: "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.primary_assembly.annotation.gtf.gz"
-transcriptome_url: "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.transcripts.fa.gz"
-sjdbOverhang: 70
-```
-
-### Aligners
-
-```yaml
-aligner: ['starsolo', 'kallisto', 'alevin']
-```
-
-Any combination of starsolo, kallisto, alevin, sbg. When sbg is included, set `sbg_cwl` to the path of the BD Rhapsody CWL file. The cross-pipeline comparison report is only produced when two or more aligners are listed; a single-aligner run skips it.
-
-#### Aligner choice
-
-- `starsolo` aligns to the genome and counts reads that map to one gene (`soloMultiMappers: Unique`). It also writes a BAM file and provides the sample tag counts.
-- `kallisto` and `alevin` pseudoalign to the transcriptome and take less time than `starsolo`. `alevin` needs the least memory; `bustools correct` reserves about 20 GB whatever the input size.
-- `alevin` spreads multi-mapping reads over genes unless `alevin_sketch: true`, which makes its counts comparable to `starsolo`.
-- Cell barcodes are corrected against the observed whitelist by each tool: `starsolo` as set by `soloCBmatchWLtype` (default `1MM_multi`, one mismatch), `kallisto` by `bustools correct`, `alevin` by `alevin-fry generate-permit-list --valid-bc` when `alevin_sketch: true`. The comparison report lists the exact, corrected and unmatched counts each tool reports.
-- `sbg` is the BD pipeline. It parses the barcodes itself and tolerates mismatches in them, so it reports more cells and UMIs than the other three at `cb_umi_max_errors: 0`. It takes the longest and needs singularity or apptainer. Use it to match counts from BD's own software.
-
-Counts from `starsolo`, `kallisto` and `alevin` correlate closely with each other. Listing two or more aligners adds the comparison report for your own data.
-
-### STARsolo options
-
-```yaml
-soloCellFilter: "EmptyDrops_CR"
-soloMultiMappers: "Unique"
-soloCBmatchWLtype: "1MM_multi"
-extraStarSoloArgs: ""
-```
-
-### Cell filtering
-
-```yaml
-cell_filtering: "native"
-```
-
-- `native`: STARsolo uses its soloCellFilter; alevin and kallisto apply DropletUtils barcodeRanks.
-- `emptydrops`: apply DropletUtils emptyDrops across all aligners.
-- `none`: no cell filtering; every observed barcode is kept so you can filter downstream yourself. For STARsolo this overrides soloCellFilter to None; for alevin and kallisto the knee filter is skipped.
-
-`native` takes the least time and fits a run with one aligner. With `emptydrops` every aligner is filtered by the same method, so cell numbers are comparable between aligners; it tests each barcode against the ambient profile of the empty droplets, which helps on tissues where small cells have few UMIs.
-
-### Alevin UMI counting
-
-```yaml
-alevin_sketch: true
-```
-
-- `false` (default): alevin uses graph-based EM deduplication, giving fractional multi-mapper counts. Not directly comparable to STARsolo Unique.
-- `true`: salmon runs in RAD mapping mode and alevin-fry quantifies with cr-like resolution, giving integer counts comparable to STARsolo Unique.
-
-### Alevin USA mode (spliced/unspliced/ambiguous)
-
-```yaml
-alevin_usa: true
-alevin_sketch: true
-```
-
-- `alevin_usa: false` (default): alevin quantifies against the plain transcriptome.
-- `alevin_usa: true`: a spliced+unspliced (spliceu) reference is built with pyroe from the genome and GTF, and alevin-fry quantifies in USA mode (triggered automatically by the 3-column t2g). The resulting SingleCellExperiment keeps the spliced plus ambiguous counts as the main `counts` assay and adds `spliced`, `unspliced` and `ambiguous` assays for RNA velocity. USA counting is an alevin-fry feature, so it requires `alevin_sketch: true`; the pipeline stops with an error otherwise.
-
-### Output format
-
-```yaml
-output_format: sce   # sce, h5ad, or both
-```
-
-- `sce` (default): each aligner SCE and each per-tag split is written as an HDF5-backed `SingleCellExperiment` only. This is the original behaviour.
-- `h5ad`: write an anndataR h5ad instead. The sample tag split verification and the SCE-based reports read an SCE, so use `sce` or `both` if you rely on them.
-- `both`: write the SCE and an h5ad next to it.
-
-The h5ad files are written with anndataR, which reads back into R with `anndataR::read_h5ad()` and into Python with `anndata.read_h5ad()`. Main SCEs go to `{aligner}/{sample}/{sample}_{aligner}.h5ad`; per-tag splits go to `{aligner}/{sample}/by_sampletag/{label}/adata.h5ad`.
-
-### Sample tag split backend
-
-```yaml
-sampletag_split_backend: memory   # memory or delayed
-```
-
-Controls how each aligner SCE is split into one object per sample tag.
-
-- `memory` (default): read the source counts into RAM once as a sparse matrix, then subset each tag in memory. The source is read a single time. This needs enough RAM to hold the full count matrix.
-- `delayed`: keep the counts on disk (HDF5-backed) and subset them lazily. This uses little memory, but the source is re-read once per tag, so it is slow when a sample carries many tags or the matrix is large.
-
-### Samples
-
-FASTQs can be local files or fetched from SRA by accession. Per-sample fields are all optional; bead chemistry is auto-detected from R1 linkers and the config values below are used as a QC check and for logging.
-
-```yaml
 samples:
-  - name: my_sample
+  - name: sample01
     uses:
-      cb_umi_fq: /path/to/R1.fastq.gz
-      cdna_fq: /path/to/R2.fastq.gz
-      allowedlist: 384             # 96 or 384 (default 384)
-      diversity_insets: yes        # yes or no (default yes; detected from R1)
-      use_sampletags: yes          # yes or no (default follows global skip_sampletags)
-      species: human               # human or mouse; required when use_sampletags is yes
-      downsample: 100              # percentage in (0, 100]; default 100
+      cb_umi_fq: [/globalscratch/tsirchi/cemlab/simpleaf/input/sample01_R1.fastq.gz]
+      cdna_fq: [/globalscratch/tsirchi/cemlab/simpleaf/input/sample01_R2.fastq.gz]
+      allowedlist: 384
+      diversity_insets: 'yes'
 ```
 
-`cb_umi_fq` and `cdna_fq` each accept either a single path or a list of paths. When a sample was sequenced across several files, list them and the pipeline concatenates each read into one fastq before processing. List R1 and R2 in the same order so mates stay paired; the two lists must have the same length.
+For multiple lanes, extend both lists in the same lane order. Samples require unique, safe path-component names. The supplied [WTA1 configuration](configs/velocity.yaml) describes seven lanes and the GRCh38/GENCODE v49 reference; inspect it before use. The workflow accepts an index directory or its parent, requires a piscem index and an S/U transcript-to-gene map, and does not build or modify the production reference.
 
-```yaml
-samples:
-  - name: my_sample
-    uses:
-      cb_umi_fq:
-        - /path/to/lane1_R1.fastq.gz
-        - /path/to/lane2_R1.fastq.gz
-      cdna_fq:
-        - /path/to/lane1_R2.fastq.gz
-        - /path/to/lane2_R2.fastq.gz
+Reference preflight validates the index/map before FASTQ processing. Its ordinary dependencies ensure early failure; a reference update can also invalidate preparation, so inspect a dry run before changing a completed workflow. Genome/release labels come from an optional identity manifest; they are recorded as `unknown` when it is absent. The driver no longer substitutes GRCh38/v49 for an arbitrary reference.
+
+The workflow automatically reads `reference_manifest.json` inside the resolved index directory when present. To use a manifest elsewhere, add `reference_manifest: /absolute/path/reference_manifest.json` under `simpleaf`. Its format is:
+
+```json
+{
+  "version": 1,
+  "index_type": "spliceu",
+  "genome": "<assembly documented by the reference build>",
+  "GENCODE_release": "<release documented by the reference build>",
+  "reference_t2g_sha256": "<SHA256 of t2g_3col.tsv>",
+  "reference_index_meta_sha256": "<SHA256 of simpleaf_index.json>"
+}
 ```
 
-Vocabulary cheat sheet (maps to legacy BD bead classes):
+Replace the placeholders with build-record identities and actual hashes. A supplied manifest must be complete and match both small reference files; otherwise preflight fails before preparation. Matching hashes bind the declared identity to those files, but do not authenticate the biological annotation or checksum the entire large index. The preflight records index-file paths/sizes/mtimes and rechecks them before quantification; see [reference validation](workflow/scripts/simpleaf_quant.py).
 
-| allowedlist | diversity_insets | legacy name   |
-| ----------- | ---------------- | ------------- |
-| 96          | no               | v1            |
-| 96          | yes              | enhanced      |
-| 384         | yes              | enhanced_v2   |
+## Inspect the DAG before execution
 
-SRA fetch:
+Place the newly tested image and your config at the paths below. From a Slurm allocation, use at least two CPU cores and review a dry run:
 
-```yaml
-samples:
-  - name: sample_16_wta_p60
-    uses:
-      sra_run: "SRR24978231"
-      allowedlist: 96
-      diversity_insets: no
+```bash
+apptainer exec --cleanenv --bind /globalscratch \
+  /globalscratch/tsirchi/cemlab/simpleaf/containers/rhapsodist-simpleaf.performance.sif \
+  rhapsodist --configfile /globalscratch/tsirchi/cemlab/simpleaf/configs/my_sample.yaml \
+  --cores "${SLURM_CPUS_PER_TASK:-16}" --resources mem_mb=64000 --dry-run
 ```
 
-### CB/UMI harmonization tolerance
+Remove `--dry-run` when ready to process the configured inputs. Use a fresh `working_dir` when evaluating changed source or migrating completed runs: Snakemake can invalidate downstream results after code/config changes. The supplied [Slurm script](slurm/velocity.sbatch) uses the older image filename and must be adjusted before launching a new artifact. Snakemake rules invoke local tools inside the single container.
 
-The R1 linker trim step runs cutadapt with `-e` set by `cb_umi_max_errors` (integer, default 0 = exact match). Raise it to accept mismatches in the fixed linker sequences on noisy reads.
+## FASTQ quality control
 
-```yaml
-cb_umi_max_errors: 1
+Routine QC reuses exact paired Cutadapt statistics and validates final R1 during the existing whitelist traversal. Each final R1 record must have valid FASTQ structure, matching sequence/quality lengths and exactly 27 barcode + 8 UMI bases. Its total must match Cutadapt's output-pair count. Each prepared R2 unit is written directly by Cutadapt while cropped R1 streams through the unchanged line-wise `cut` operation into pigz. Prepared units are assembled in configured order without decompression; both operations preserve record order and count. Routine prepared-pair consistency therefore relies on this construction, without an independent R2 decompression pass.
+
+For unsampled inputs, each lane runs through Cutadapt independently and supplies its exact raw pair count. The legacy first-token mate-name comparison (including `/1` and `/2` handling) runs inside the existing Cutadapt/dnaio iterator, before filtering, so it requires no second raw traversal. This adapter is guarded for Cutadapt 4.9 and Linux fork workers, matching the pinned runtime. The classifier scans the same bounded R1 sequence prefix across lanes in their configured order; incompatible or unknown chemistry now fails before Cutadapt. Downsampled inputs retain the original sample-wide concat/seqtk selection and independent original-lane count/pairing scans. Retained percentage always uses **all original input pairs** as its denominator. The receipt binds counts to the configured sample, ordered file paths, sizes and mtimes; a content hash protects the observed whitelist. The downstream QC gate checks that receipt without rereading FASTQs.
+
+| Mode | Additional checks | Limit |
+|---|---|---|
+| Routine, default | Receipt/file association, whitelist validity and exact counts established during preparation | Does not independently reread prepared R2 or verify its post-generation gzip integrity |
+| `fastq_qc_exhaustive: true` | Full original/prepared mate traversal, structure, gzip integrity, counts and transformed-header comparison | Can take hours; opt-in for troubleshooting |
+
+The enhanced-linker requirement gates preparation and is checked again before quantification. Linker classification uses a bounded sample of reads, not exhaustive chemistry verification. File size/mtime checks are not cryptographic FASTQ checksums, and configured sample identity cannot authenticate a biologically mislabeled input. Full guarantees and limitations are documented in the [performance audit](PERFORMANCE_AUDIT.md).
+
+## Outputs, resources and recovery
+
+```text
+results_performance/
+├── data/fastq/                       # persistent prepared mates; temporary units/ during assembly
+├── data/{sample}_observed_whitelist.txt
+├── logs/                            # preparation, Cutadapt JSON, QC and quantification logs
+└── {sample}/
+    ├── simpleaf/af_quant/alevin/     # native USA matrix and original row/column labels
+    ├── {sample}_velocity.h5ad
+    └── qc/                          # preparation receipt, FASTQ QC, conversion and validation
 ```
 
-### Sample tags
+Prepared FASTQs remain persistent so quantification can be retried without repeating preparation. Unsampled lanes need no combined raw files or cropped R1 intermediate. Prepared lane files are Snakemake temporary outputs: completed lanes remain available while another lane fails, then are removed after successful assembly. Their small Cutadapt reports/logs persist. Multi-lane assembly briefly holds both unit and final prepared files and copies compressed bytes; a single unit is hard-linked without copying. Combined/downsampled raw files remain retained only on the downsampling path. Deleting retained intermediates saves disk but can force regeneration. Completed steps can be reused; interrupted/incomplete jobs may require Snakemake's `--rerun-incomplete`. Failed SimpleAF work is cleaned up and restarted at the quantification step, without internal mapping checkpoints. Prepared outputs, quantification and H5AD use same-filesystem renames after their respective checks. Multiple file renames are not a single transaction: downstream dependencies and the receipt determine readiness. Controlled pipeline failures clean staging files; a hard process/node kill can leave hidden staging directories for later review.
 
-BD Rhapsody sample tags (sample multiplexing) ride in the same WTA library as the cDNA reads, so there is no separate sample tag FASTQ to point at. The pipeline extracts sample tag reads from the WTA reads that do not map to the transcriptome, aligns them to the bundled tag sequences in `workflow/data/sampletags/{species}_sampletags.fa`, and demultiplexes. You only need to enable it and set the species:
+| Stage | CPU declaration | Memory reservation |
+|---|---|---|
+| Cutadapt + crop/cut, per unit | `nthreads`, capped by allocation; at least 2 | `preprocess_mem_mb`, default 8192 MB |
+| Whitelist and FASTQ QC | 1 | `fastq_qc_mem_mb`, default 4096 MB |
+| SimpleAF | `nthreads`, limited by available cores | `max_mem_mb`, default 64000 MB |
+| H5AD export and validation | 1 | `export_mem_mb`, default 16000 MB |
 
-```yaml
-skip_sampletags: false     # default; true skips tag demultiplexing
-samples:
-  - name: my_sample
-    uses:
-      cb_umi_fq: /path/to/R1.fastq.gz
-      cdna_fq: /path/to/R2.fastq.gz
-      use_sampletags: yes      # per-sample override of skip_sampletags
-      species: human           # human or mouse; required when use_sampletags is yes
+A streaming unit assigns `threads - 1` Cutadapt workers and one pigz compression thread; I/O/helper processes add overhead. Independent lanes can run concurrently when CPU and memory budgets permit. Reservations guide scheduling and must fit the Slurm allocation; they are not measured production peak-memory guarantees. Whitelist RAM grows with distinct observed valid barcodes, while export/validation RAM grows with sparse matrix size. Whitelist/raw-scan progress is logged every ten million records. The [audit](PERFORMANCE_AUDIT.md) distinguishes removed passes from work that remains: wall-clock and peak-memory improvements have not been benchmarked on production samples.
+
+## Development validation
+
+These checks use deterministic fixtures, mocked tool calls, a placeholder-index dry run and a tiny synthetic reference. They do not read the configured biological samples:
+
+```bash
+pixi install --locked
+export XDG_CACHE_HOME="$PWD/.cache"
+export VELOCITY_SNAKEMAKE="$PWD/.pixi/envs/default/bin/snakemake"
+export VELOCITY_SIMPLEAF="$PWD/.pixi/envs/default/bin/simpleaf"
+export VELOCITY_CUTADAPT_PYTHON="$PWD/.pixi/envs/default/bin/python"
+export VELOCITY_PREPROCESS_BIN="$PWD/.pixi/envs/default/bin"
+pixi run --locked python -W error::DeprecationWarning -W error::FutureWarning tests/velocity/test_velocity.py
+pixi run --locked python -m unittest discover -s tests -p test_cli.py
+pixi run --locked python tests/velocity/synthetic_e2e.py
 ```
 
-Only human and mouse tag sets are bundled.
+The local performance-change validation passed 24 velocity tests, two CLI tests and synthetic single-input, split-lane and downsampled workflows derived from 40 generated pairs, including completed-run and failed-lane resume checks. Tests compare decompressed prepared streams against upstream, identical whitelists/QC tables, malformed/truncated inputs, strict mate-name mismatches with multiple workers, pipeline failures, early chemistry/reference rejection, manifest bindings, stale receipts, BD conversion and serialized S+A/U counts. This establishes fixture behavior, not production reference performance or Slurm resource adequacy. The current graph index remains incomplete for some working-tree files; graph review is not a separate correctness certification.
 
-When the sample tags were sequenced as their own library, give its fastqs, or its SRA run, next to the WTA ones:
+## Provenance and documentation
 
-```yaml
-samples:
-  - name: my_sample
-    uses:
-      cb_umi_fq: /path/to/wta_R1.fastq.gz
-      cdna_fq: /path/to/wta_R2.fastq.gz
-      sampletag_cb_umi_fq: /path/to/sampletag_R1.fastq.gz
-      sampletag_cdna_fq: /path/to/sampletag_R2.fastq.gz
-      # or: sampletag_sra_run: "SRR..."
-      use_sampletags: yes
-      species: mouse
-```
+Each workflow run records SHA256 of the runtime workflow sources, Pixi manifest/lock, canonical effective configuration and preparation QC receipt in native `pipeline_provenance.json`, then retains them in H5AD `uns['pipeline']`. Source paths and hashes are aligned arrays for H5AD compatibility. Sources, lock and receipt are checked before and after quantification; a change prevents publication. These are small-file hashes, not sequencing-file content checksums. Direct library calls without config/receipt metadata record those fields as `unavailable`.
 
-The tag library is standardized like the WTA reads, under the name `{sample}_sampletags`, and is never downsampled. Its tags are counted by the alignment-free search, also when `starsolo` runs.
+Preparation originates from [imallona/rhapsodist, commit 7991f870fdfe38e12648673d330cbfd4839e755d](https://github.com/imallona/rhapsodist/tree/7991f870fdfe38e12648673d330cbfd4839e755d), under GPL-3.0; see [LICENSE.txt](LICENSE.txt) and [AUTHORS.txt](AUTHORS.txt). Crop/linker/error parameters, the line-wise header transformation and ordered BD panels are retained. Streaming, per-lane orchestration, early gates, JSON statistics, QC receipts and resource declarations are described in the [audit](PERFORMANCE_AUDIT.md). Tests require the upstream commit to remain available in Git history.
 
-Two methods produce the tag counts, chosen automatically from the aligner list:
-
-- When `starsolo` is among the aligners, sample tags are called by the starsolo mode: extract the WTA reads that STARsolo leaves unmapped (with their corrected cell barcode and UMI), align them to the tag sequences, and count. Only the 70 bp tag matches within the full-length read, so the STAR step filters on an absolute matched-base count rather than the default read-length fraction.
-- When `starsolo` is not run (for example an alevin-only or kallisto-only configuration), sample tags are called by an alignment-free search instead (`workflow/src/search_sampletags.py`). It scans the standardized reads directly for the fixed tag prefix, assigns each match to the closest tag by hamming distance, and corrects the cell barcode segments against the BD whitelists with the same one-mismatch tolerance STARsolo applies. Both methods write the same count table, so the demultiplexing and report steps are identical.
-
-The choice is not configurable. When starsolo is present it always provides the tag counts, so a config that reproduces the published figures cannot switch methods. The search method runs when starsolo is absent, and for a sample with a separate tag library. On the simulated data it assigned every cell to its true tag.
-
-#### Restricting tags and splitting counts per tag
-
-Declare the tags a sample carries with the per-sample `sampletags` field. Reads are then matched only against those tags, so a read is never assigned to a tag the sample does not contain.
-
-```yaml
-samples:
-  - name: my_sample
-    uses:
-      use_sampletags: yes
-      species: human
-      sampletags: [1, 2, 3, 4]     # only tags 1-4 are matched
-```
-
-Use a mapping to rename each tag's output to a sample label:
-
-```yaml
-      sampletags:
-        1: pbmc_donorA
-        2: pbmc_donorB
-```
-
-Keys are the tag number or the full name (`{species}_sampletag_N`). `workflow/src/demux_sampletags.R` assigns each cell to a tag once and writes one table; the QC report and the splitting step both read it. For each tag, the singlet cells (high-quality and called) are saved under `{aligner}/{sample}/by_sampletag/{label}/`: an HDF5-backed `SingleCellExperiment` (load with `HDF5Array::loadHDF5SummarizedExperiment()`), an `adata.h5ad`, or both, set by `output_format`. The split speed is set by `sampletag_split_backend` (see the options above).
-
-The restriction applies per sample. Several fastqs for one sample are concatenated before processing, so it covers the whole sample rather than individual files. Without the field, all species tags are matched and the split uses the tags seen in the data.
-
-To pick a sensible value, use the per-sample linker QC report (`linker_qc/{sample}_linker_qc.html`). It scans the first 10000 R1 reads, computes the hamming distance of each read to the expected fixed linker sequences (for both v1 and enhanced chemistries), and reports the fraction of reads at each error count. The cumulative table maps a given `cb_umi_max_errors` value to the fraction of reads that would survive the cutadapt trim at that tolerance.
-
-### Downsampling
-
-Set `downsample` to a percentage in (0, 100] to randomly subsample paired R1/R2 fastqs before trimming. Default 100 keeps all reads; the same seed (`downsample_seed`, default 42) is used for R1 and R2 so pairs stay aligned. Per-sample `uses.downsample` overrides the global key.
-
-```yaml
-downsample: 10           # use 10% of reads
-# downsample_seed: 42
-```
-
-### Reports
-
-```yaml
-skip_sampletags: true          # skip sampletag demultiplexing (default false)
-run_biology_report: true       # generate biology report with marker expression, clustering, cross-pipeline concordance
-biology_markers_file: data/markers/skin_markers.tsv   # TSV with marker and cell_type columns, relative to workflow dir
-```
-
-The biology report compares pipelines on QC, marker expression, pseudobulk correlation, barcode overlap, per-barcode UMI concordance, and cluster agreement (adjusted Rand index). It reads a markers TSV file with two columns (marker, cell_type) to know which genes to check. `skin_markers.tsv` (mouse epidermis, used by Sendoel) and `neutrophil_markers.tsv` (mouse neutrophil maturation) are included; add your own TSV for other tissues.
-
-Set `use_case: trajectory` and `trajectory_root_marker` (a gene marking the earliest state) for a sample with a differentiation course. The report then adds a pseudotime per aligner, the graph distance from the cluster with the highest expression of that gene, and the Spearman correlation of pseudotime between aligners. `use_case: hela` replaces the marker panels by cell cycle phase.
-
-When external per-cell metadata is available (e.g. CRISPR guide assignments from a separate amplicon library), the report joins it for visualization. The pipeline itself does not process or quantify guides.
-
-### Benchmarks
-
-Each rule writes time and peak memory to `benchmarks/`. `run_info.tsv` records the CPU model, number of CPUs, memory, filesystem type of the working directory, Snakemake version and the cores given to the run. With `--benchmark-extended` (Snakemake 8.12 or later; the `rhapsodist` command passes it) the benchmark files also hold the threads of each rule. The benchmarks report prints both.
-
-### BD Rhapsody official pipeline (optional)
-
-Add sbg to the aligner list and set sbg_cwl:
-
-```yaml
-aligner: [starsolo, kallisto, alevin, sbg]
-sbg_cwl: third_party/cwl/v2.2.1/rhapsody_pipeline_2.2.1.cwl
-```
-
-The reference archive is built from the STAR index and GTF. To use a pre-built BD archive:
-
-```yaml
-sbg_reference_url: "http://bd-rhapsody-public.s3-website-us-east-1.amazonaws.com/..."
-# or
-sbg_reference_archive: /path/to/Rhapsody_reference.tar.gz
-```
-
-sbg requires `singularity` or `apptainer` on `PATH` (not installable via conda). The workflow refuses to start otherwise.
-
-The CWL run is one Snakemake rule. Its steps are timed from the cwltool log and written to `benchmarks/sbg_cwl_steps_{sample}.tsv` (step, start, end, seconds, status).
-
-## Slurm
-
-`slurm/` has one job script per run. A job runs Snakemake on the cores of its own allocation, so the benchmark files of a run come from one node. The run scripts request 10 cores on one CPU model; set `--constraint` to a model of your cluster.
-
-```
-cp slurm/site.env.example slurm/site.env   # site paths; ignored by git
-mkdir -p slurm/logs
-sbatch slurm/00_probe.sh
-```
-
-Order:
-
-1. `00_probe.sh`: environment, internet access, apptainer.
-2. `01_environments.sh`: conda environments and the BD image.
-3. `02_simulations.sh`, `03_hela.sh`, `04_epidermis.sh`: 10 cores each, in any order.
-4. `05_linker_tolerance.sh` (4 tasks), `06_public_datasets.sh` (2 tasks), `07_other_workflows.sh` (2 tasks): 10 cores per task, after 03 and 04.
-5. `08_figures.sh`: figure tables of every run, with the linker tolerance, other workflow and sample tag comparisons. Then `09_archive.sh`.
-
-Run together, 05 to 07 use 80 cores. `sbatch --array=0-3%2 slurm/05_linker_tolerance.sh` runs two tasks at a time.
-
-`07_other_workflows.sh` requires `nextflow` on `PATH`, and the UniverSC sandbox and zUMIs clone described in `paper/README.md`. Downloads with `curl` are retried, as set in `slurm/.curlrc`. `output` can be a symlink to scratch storage; `09_archive.sh` copies reports, count objects, benchmarks and logs to `RESULTS_DIR`.
-
-## Contributors
-
-- Izaskun Mallona
-- Jiayi Wang
-- Giulia Moro
-
-Tools used: STAR, samtools, kallisto, bustools, salmon/alevin, cutadapt, pigz, R/Bioconductor (SingleCellExperiment, DropletUtils, HDF5Array).
-
-## Contact
-
-izaskun.mallona at mls.uzh.ch, Mark D. Robinson lab
-https://www.mls.uzh.ch/en/research/robinson.html
-
-## History
-
-started 30 July 2024, keeping history from https://github.com/imallona/rock_roi_method
+Documentation was revised with the scientific-writing and biomedical-proposal-writer skills. The scientific-writing guidance is part of Kassis T, Agarwal V, He Y, Patel D, Brueckner AM (2026), *Scientific Agent Skills: A Library of Procedural Knowledge for Research Agents*. [doi:10.48550/arXiv.2609.00065](https://doi.org/10.48550/arXiv.2609.00065). This credits the writing guidance; workflow behavior is supported by the linked source and tests.

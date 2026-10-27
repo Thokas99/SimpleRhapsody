@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
-## Installs Snakemake and rhapsodist into the base environment of a micromamba
-## image and builds the pinned conda environments of workflow/envs. Shared by
-## Dockerfile and rhapsodist.def; run from the repository copy in the image.
 set -euo pipefail
-
-micromamba install -y -n base -c conda-forge -c bioconda \
-    python=3.12 snakemake=9.27.0 conda pip git
-micromamba run -n base pip install --no-deps -e .
-
-## the two configs together use every environment except sbg
-for config in configs/sim_config.yaml configs/sendoel2024_config.yaml; do
-    micromamba run -n base snakemake --snakefile workflow/Snakefile \
-        --configfile "$config" --config "aligner=['starsolo','kallisto','alevin']" \
-        --use-conda --conda-prefix "$SNAKEMAKE_CONDA_PREFIX" \
-        --conda-create-envs-only --cores 1
-done
-micromamba clean -a -y
+cd "$(dirname -- "${BASH_SOURCE[0]}")"
+export PIXI_CACHE_DIR="${PIXI_CACHE_DIR:-$PWD/.cache/pixi}"
+export RATTLER_CACHE_DIR="$PIXI_CACHE_DIR"
+export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-$PWD/.cache/apptainer}"
+export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-$PWD/.cache/build}"
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+pixi install --locked
+export XDG_CACHE_HOME="$PWD/.cache"
+export VELOCITY_SNAKEMAKE="$PWD/.pixi/envs/default/bin/snakemake"
+export VELOCITY_SIMPLEAF="$PWD/.pixi/envs/default/bin/simpleaf"
+export VELOCITY_CUTADAPT_PYTHON="$PWD/.pixi/envs/default/bin/python"
+export VELOCITY_PREPROCESS_BIN="$PWD/.pixi/envs/default/bin"
+pixi run --locked python3 -W error::DeprecationWarning -W error::FutureWarning tests/velocity/test_velocity.py
+pixi run --locked python3 -m unittest discover -s tests -p test_cli.py
+PYTHONWARNINGS=error::DeprecationWarning,error::FutureWarning pixi run --locked python3 tests/velocity/synthetic_e2e.py
+# Build a new image before replacing any existing deployment artifact.
+image="${1:-$PWD/rhapsodist-simpleaf.sif}"
+test ! -e "$image" || { echo "Refusing to overwrite $image" >&2; exit 2; }
+apptainer build --fakeroot "$image" rhapsodist.def
+apptainer test "$image"
+apptainer exec --cleanenv "$image" env PYTHONWARNINGS=error::DeprecationWarning,error::FutureWarning python3 /opt/rhapsodist/tests/velocity/synthetic_e2e.py
+apptainer exec --cleanenv "$image" python3 -c 'import numpy, scipy, pandas, anndata, h5py, yaml'
+(cd "$(dirname -- "$image")" && sha256sum "$(basename -- "$image")") > "$image.sha256"
+stat --printf='%n: %s bytes\n' "$image"

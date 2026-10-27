@@ -1,21 +1,58 @@
-## Same image as Dockerfile, built with: apptainer build rhapsodist.sif rhapsodist.def
 Bootstrap: docker
-From: mambaorg/micromamba:2.9.0
+From: debian@sha256:ec31d744f83f4a73447ba045aaab9409997efe5cc706eca4890c1be36cc1606a
 
 %files
+    pixi.toml /opt/rhapsodist/pixi.toml
+    pixi.lock /opt/rhapsodist/pixi.lock
+    pyproject.toml /opt/rhapsodist/pyproject.toml
+    rhapsodist /opt/rhapsodist/rhapsodist
     workflow /opt/rhapsodist/workflow
     configs /opt/rhapsodist/configs
-    rhapsodist /opt/rhapsodist/rhapsodist
-    pyproject.toml /opt/rhapsodist/pyproject.toml
-    container_build.sh /opt/rhapsodist/container_build.sh
-
-%environment
-    export SNAKEMAKE_CONDA_PREFIX=/opt/rhapsodist_envs
+    LICENSE.txt /opt/rhapsodist/LICENSE.txt
+    AUTHORS.txt /opt/rhapsodist/AUTHORS.txt
+    tests /opt/rhapsodist/tests
 
 %post
-    export SNAKEMAKE_CONDA_PREFIX=/opt/rhapsodist_envs
-    cd /opt/rhapsodist
-    bash container_build.sh
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends ca-certificates curl
+    rm -rf /var/lib/apt/lists/*
 
-%runscript
-    exec micromamba run -n base rhapsodist "$@"
+    export PIXI_HOME=/opt/pixi
+    export PIXI_VERSION=v0.83.0
+    export PIXI_NO_PATH_UPDATE=1
+    curl -fsSL https://pixi.sh/install.sh | bash
+    export PATH="$PIXI_HOME/bin:$PATH"
+
+    cd /opt/rhapsodist
+    pixi install --locked
+    printf '#!/bin/sh\nexec /opt/rhapsodist/.pixi/envs/default/bin/python /opt/rhapsodist/rhapsodist/cli.py "$@"\n' > .pixi/envs/default/bin/rhapsodist
+    chmod 755 .pixi/envs/default/bin/rhapsodist
+
+    rm -rf /root/.cache/rattler /root/.cache/pixi /opt/rhapsodist/.pixi/cache
+    rm -f "$PIXI_HOME/bin/pixi"
+    apt-get clean
+
+%environment
+    export RHAPSODIST_ENV=/opt/rhapsodist/.pixi/envs/default
+    export PATH="$RHAPSODIST_ENV/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+    export PYTHONNOUSERSITE=1
+    export ALEVIN_FRY_HOME=${ALEVIN_FRY_HOME:-/tmp/simpleaf}
+
+%labels
+    Base debian:12.15-slim
+    Pixi 0.83.0
+    Python 3.12.15
+    Snakemake 9.27.0
+    Cutadapt 4.9
+
+%test
+    set -eu
+    for tool in python3 snakemake cutadapt simpleaf piscem alevin-fry seqtk pigz; do
+        command -v "$tool"
+    done
+    for tool in python3 snakemake cutadapt simpleaf piscem alevin-fry; do
+        "$tool" --version
+    done
+    python3 -c 'import numpy, scipy, pandas, anndata, h5py, yaml, snakemake, cutadapt'

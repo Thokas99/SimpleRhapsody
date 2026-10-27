@@ -1,6 +1,14 @@
 .git
+.pixi
 .snakemake
-output
-third_party
-slurm/site.env
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+results
 site
+build
+dist
+tests
+repomix-output.xml
+*.sif

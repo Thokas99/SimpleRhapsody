@@ -1,8 +1,0 @@
-name: noname
-channels:
-  - conda-forge
-  - bioconda
-  - nodefaults
-dependencies:
-  - bioconda::sra-tools=3.0.10
-  - conda-forge::pigz

@@ -33,7 +33,7 @@ def find_snakefile():
 def main():
     ap = argparse.ArgumentParser(
         prog="rhapsodist",
-        description="run the rhapsodist bd rhapsody wta pipeline.",
+        description="run BD Rhapsody preparation and SimpleAF USA velocity-count export.",
         epilog="any extra arguments are forwarded verbatim to snakemake.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         ## without this, snakemake's --config is read as --configfile
@@ -41,9 +41,9 @@ def main():
     )
     ap.add_argument(
         "--configfile",
-        default="configs/config.yaml",
+        default="configs/velocity.yaml",
         metavar="FILE",
-        help="path to the pipeline config yaml (default: configs/config.yaml)",
+        help="path to the pipeline config yaml (default: configs/velocity.yaml)",
     )
     ap.add_argument(
         "--cores",
@@ -66,7 +66,6 @@ def main():
         "--snakefile", str(snakefile),
         "--configfile", args.configfile,
         "--cores", args.cores,
-        "--use-conda",
         "--benchmark-extended",
     ]
     if args.dry_run:

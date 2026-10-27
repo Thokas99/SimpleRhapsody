@@ -1,65 +1,26 @@
-# Ignore Python files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Ignore Conda environment files
-.env/
+*.py[cod]
+.venv/
 venv/
-*.conda
-
-# Ignore Snakemake logs and temp files
+.pixi/
+.env/
+*.egg-info/
+.snakemake/
+results/
 logs/
+site/
+build/
+dist/
 *.log
-*.snakemake/
-*.tmp
 *.out
 *.err
-
-# Ignore compiled and binary files
-*.o
-*.so
-*.exe
-*.dll
-
-# Ignore large data files
-data/reference
-results/
-*.bam
-*.vcf
-*.fastq
-*.h5
-
-# Ignore VS Code settings
-.vscode/
+*.tmp
+*.sif
+slurm/site.env
+.cache/
+.pytest_cache/
+.ruff_cache/
+.coverage*
 .RData
 .Rhistory
-._.gitignore
-._Snakefile
-._TODO
-._docs
-docker/*sif
-*.sif
-docker/testrefhuman46_Rhap_reference.tar.gz
-testrun/
-
-# Ignore pipeline outputs and local artifacts
-example/
-output/
-simulated_comparison.html
-.coverage
-docs/*html
-docs/*files
-docs/*zip
-docs/*html
-docker/testrun
-scripts/._*
-docs/._*
-
-# Ignore the metadata pip writes for an editable install
-*.egg-info/
-
-# Site paths of the Slurm job scripts
-slurm/site.env
-site/
+.DS_Store

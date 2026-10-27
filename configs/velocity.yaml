@@ -1,0 +1,37 @@
+# One independent output set per sample. FASTQ paths resolve from the launch directory.
+working_dir: /globalscratch/tsirchi/cemlab/simpleaf/results
+nthreads: 16
+max_mem_mb: 64000
+export_mem_mb: 16000
+bead_chemistry: enhanced_v2  # enhanced_v3 uses identical GTGA/GACA preparation
+cb_umi_max_errors: 0
+downsample: 100
+
+export:
+  python: python3
+
+simpleaf:
+  index: /globalscratch/tsirchi/cemlab/simpleaf/references/GRCh38_gencode_v49_spliceu/output/index
+  resolution: usa  # output mode; actual SimpleAF UMI --resolution is cr-like
+
+samples:
+  - name: WTA1
+    uses:
+      cb_umi_fq:
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L001_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L002_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L003_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L004_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L005_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L006_R1_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L007_R1_001.fastq.gz
+      cdna_fq:
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L001_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L002_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L003_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L004_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L005_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L006_R2_001.fastq.gz
+        - /globalscratch/tsirchi/cemlab/simpleaf/input/WTA1/202503822_1_WTA_S1_L007_R2_001.fastq.gz
+      allowedlist: 384
+      diversity_insets: 'yes'
