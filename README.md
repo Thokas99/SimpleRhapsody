@@ -2,6 +2,8 @@
 
 Prepare BD Rhapsody Enhanced V2/V3 whole-transcriptome reads and quantify spliced, unspliced and ambiguous counts for RNA-velocity workflows. The pipeline ends with validated count matrices; it does not estimate velocity, annotate cells or merge the original BD expression matrix.
 
+[![Velocity checks](https://github.com/Thokas99/SimpleRhapsody/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Thokas99/SimpleRhapsody/actions/workflows/tests.yml) [![Open issues](https://img.shields.io/github/issues/Thokas99/SimpleRhapsody)](https://github.com/Thokas99/SimpleRhapsody/issues) ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+
 ## Workflow
 
 The diagram shows the path from paired FASTQs and a prebuilt spliceu reference to the validated H5AD. Downsampling is optional; lanes otherwise stay separate through preparation.
@@ -44,21 +46,40 @@ Quantification uses the observed barcode whitelist with `--unfiltered-pl --min-r
 
 ## Configure and run
 
-Copy [configs/velocity.yaml](configs/velocity.yaml) and replace its WTA1 paths with paths accessible inside the container. Provide paired R1/R2 file lists in the same lane order, unique safe sample names, `bead_chemistry: enhanced_v2` or `enhanced_v3`, `allowedlist: 384`, `diversity_insets: 'yes'`, `simpleaf.resolution: usa`, and a prebuilt spliceu index. Set `downsample` in `(0, 100]`; the default, 100, keeps all read pairs. The workflow does not build or modify the reference.
+### 1. Configure a sample
 
-Reference preflight checks the piscem index, `t2g_3col.tsv` and any supplied identity manifest before FASTQ preparation. A manifest is optional; without one, genome and release provenance are recorded as unknown. See [reference validation](workflow/scripts/simpleaf_quant.py).
+Copy the supplied configuration and replace the WTA1 input, output and reference paths. Use absolute paths visible inside the container:
 
-Build a new image with Apptainer, fakeroot and Pixi available:
+```bash
+cp configs/velocity.yaml configs/my_sample.yaml
+```
+
+Set these fields in `configs/my_sample.yaml`:
+
+- `working_dir`: output directory available inside the container.
+- `simpleaf.index`: prebuilt spliceu reference; the workflow does not build or modify it.
+- `simpleaf.resolution: usa`.
+- `bead_chemistry`: `enhanced_v2` or `enhanced_v3`.
+- `samples[].uses.cb_umi_fq` and `cdna_fq`: R1 and R2 file lists with lanes in the same order.
+- `samples[].uses.allowedlist: 384` and `diversity_insets: 'yes'`.
+- `samples[].name`: unique; start with a letter or number and use only letters, numbers, `.`, `_` or `-`.
+- `downsample`: percentage greater than 0 and at most 100. The default, `100`, keeps all read pairs.
+
+Reference preflight checks the piscem index files and `t2g_3col.tsv` before FASTQ preparation. An identity manifest is optional; set `simpleaf.reference_manifest` to provide one. Without it, genome and release are recorded as unknown. See [reference validation](workflow/scripts/simpleaf_quant.py).
+
+### 2. Build a new image
+
+On Linux x86-64, with Apptainer, fakeroot and Pixi available, run:
 
 ```bash
 ./container_build.sh "$PWD/rhapsodist-simpleaf.performance.sif"
 ```
 
-The build script uses the lockfile, runs development checks and writes a checksum. It refuses to overwrite an existing image. The current cluster SIF predates the FASTQ-QC changes; build under a new name and update the image path before submitting a job.
+The script uses `pixi.lock`, runs development checks and writes a checksum. It refuses to overwrite an existing image. The installed cluster SIF predates the FASTQ-QC changes, so build under a new filename.
 
-Review the DAG with a dry run from a Slurm allocation (at least two CPU cores):
+### 3. Dry-run, then execute
 
-Copy the built image and sample config to the paths in the command, then run:
+Copy the new image and config to the cluster paths below (or bind their actual locations). From a Slurm allocation with at least two CPU cores, review the DAG:
 
 ```bash
 apptainer exec --cleanenv --bind /globalscratch \
@@ -67,7 +88,7 @@ apptainer exec --cleanenv --bind /globalscratch \
   --cores "${SLURM_CPUS_PER_TASK:-16}" --resources mem_mb=64000 --dry-run
 ```
 
-Remove `--dry-run` to execute. Use a fresh `working_dir` after changing workflow code or configuration; Snakemake may invalidate downstream results. Rules run inside the single container. The supplied [Slurm script](slurm/velocity.sbatch) still names the older image and needs updating.
+Remove `--dry-run` to execute. Use a fresh `working_dir` after changing workflow code or configuration; Snakemake may invalidate downstream results. Rules run inside the single container. The supplied [Slurm script](slurm/velocity.sbatch) still names the older image and must be updated before submission.
 
 ## Outputs and quality checks
 
